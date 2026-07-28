@@ -1,0 +1,17 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://photosbridge.dev/schemas/envelope.schema.json",
+    "title": "Photos Bridge Protocol Envelope",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["protocol_version", "message_id", "correlation_id", "device_id", "type", "sent_at", "payload"],
+    "properties": {
+        "protocol_version": { "const": 1 },
+        "message_id": { "type": "string", "minLength": 1 },
+        "correlation_id": { "type": ["string", "null"] },
+        "device_id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]+$" },
+        "sent_at": { "type": "string", "format": "date-time" },
+        "payload": {}
+    }
+}

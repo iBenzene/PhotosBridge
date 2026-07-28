@@ -1,0 +1,9 @@
+.git
+.DS_Store
+node_modules
+**/dist
+**/DerivedData
+data
+*.sqlite*
+.env*
+apps/apple

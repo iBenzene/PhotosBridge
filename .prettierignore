@@ -1,0 +1,16 @@
+# Build outputs and dependencies
+node_modules
+dist
+build
+
+# Data and SQLite files
+data/
+*.sqlite
+*.sqlite-journal
+*.db
+
+# Temporary logs and caches
+*.log
+.DS_Store
+.vscode
+.idea

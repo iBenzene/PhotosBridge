@@ -1,0 +1,23 @@
+{
+    "protocol_version": 1,
+    "errors": [
+        "DEVICE_OFFLINE",
+        "AUTHENTICATION_FAILED",
+        "PAIRING_EXPIRED",
+        "PAIRING_ALREADY_USED",
+        "PHOTO_PERMISSION_INSUFFICIENT",
+        "ASSET_NOT_FOUND",
+        "ALBUM_NOT_FOUND",
+        "ALBUM_NOT_WRITABLE",
+        "AMBIGUOUS_ALBUM_NAME",
+        "SNAPSHOT_INVALIDATED",
+        "ICLOUD_DOWNLOAD_DISABLED",
+        "PLAN_EXPIRED",
+        "PLAN_HASH_MISMATCH",
+        "OPERATION_STATE_UNKNOWN",
+        "PHOTOKIT_READ_FAILED",
+        "PHOTOKIT_WRITE_FAILED",
+        "PROTOCOL_VERSION_UNSUPPORTED",
+        "MESSAGE_TYPE_UNSUPPORTED"
+    ]
+}

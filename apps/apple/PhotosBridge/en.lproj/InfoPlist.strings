@@ -1,0 +1,5 @@
+"CFBundleDisplayName" = "Photos Bridge";
+"NSCameraUsageDescription" = "Photos Bridge uses the camera to scan a one-time pairing QR code displayed by the server you select.";
+"NSLocalNetworkUsageDescription" = "Photos Bridge needs access to your local network to connect to a Photos Bridge server.";
+"NSPhotoLibraryAddUsageDescription" = "Photos Bridge only adds selected photos to the specified album after you explicitly approve a write plan.";
+"NSPhotoLibraryUsageDescription" = "Photos Bridge reads the photos and albums you authorize to generate thumbnails and execute organization plans you approve.";

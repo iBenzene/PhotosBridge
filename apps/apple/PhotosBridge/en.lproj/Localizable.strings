@@ -1,0 +1,137 @@
+/* App Sections */
+"计划" = "Plans";
+"历史" = "History";
+"设置" = "Settings";
+
+/* General / Common Actions */
+"好" = "OK";
+"未知错误" = "Unknown Error";
+"相册" = "Album";
+"候选照片" = "Candidate Photos";
+"来源" = "Source";
+"未知服务器" = "Unknown Server";
+"创建时间" = "Created At";
+"有效期" = "Expires At";
+"已过期" = "Expired";
+"计划哈希" = "Plan Hash";
+"写入计划" = "Write Plan";
+"说明" = "Summary";
+"审核计划" = "Review Plan";
+"批准并执行" = "Approve & Execute";
+"拒绝" = "Reject";
+"取消" = "Cancel";
+"配对" = "Pair";
+"授权" = "Grant";
+"重新加载" = "Reload";
+"服务器" = "Server";
+"Photos Bridge Version %@" = "Photos Bridge Version %@";
+
+/* Plan Details & Warnings */
+"批准后只会把已有照片加入相册，不会复制、编辑或删除原始照片。" = "Approving will only add existing photos to the album without copying, editing, or deleting original photos.";
+"需要照片权限才能检查或执行计划" = "Photo permission is required to inspect or execute plans";
+"需要照片权限" = "Photo Access Required";
+"Photos Bridge 需要访问您允许的照片，才能检查和执行计划。" = "Photos Bridge needs access to photos you allow to inspect and execute plans.";
+"授权照片访问" = "Grant Photo Access";
+"前往设置" = "Go to Settings";
+"暂无计划" = "No Plans";
+"来自服务器的计划会保存在这里，供您稍后审核。" = "Plans sent from the server will appear here for your review.";
+"%lld 张照片" = "%lld Photos";
+
+/* Undo Plan */
+"批次" = "Batch";
+"成员关系" = "Membership";
+"撤销范围" = "Undo Scope";
+"撤销只会移除本批次新增的相册成员关系，不会删除原始照片，也不会影响其他相册。" = "Undo only removes album membership added in this batch. Original photos and other albums will not be affected.";
+"批准撤销计划" = "Approve Undo Plan";
+"批准并撤销" = "Approve & Undo";
+
+/* History */
+"暂无历史" = "No History";
+"目标相册" = "Target Album";
+"批次 ID" = "Batch ID";
+"基本信息" = "General Info";
+"请求" = "Requested";
+"新增" = "Added";
+"已存在" = "Skipped (Existing)";
+"缺失" = "Missing";
+"失败" = "Failed";
+"执行统计" = "Execution Stats";
+"已移除相册关系" = "Removed Membership";
+"撤销失败" = "Undo Failed";
+"撤销结果" = "Undo Result";
+"创建撤销计划" = "Create Undo Plan";
+"历史详情" = "History Detail";
+"已撤销 (%lld张)" = "Undone (%lld)";
+
+/* Settings */
+"照片" = "Photos";
+"权限" = "Permission";
+"管理有限照片访问" = "Manage Limited Photo Access";
+"打开系统设置" = "Open System Settings";
+"允许缩略图离开设备" = "Allow Thumbnails to Leave Device";
+"允许从 iCloud 下载" = "Allow iCloud Download";
+"检查授权内容" = "Inspect Authorized Content";
+"状态" = "Status";
+"地址" = "Address";
+"设备 ID" = "Device ID";
+"解除与此服务器的配对" = "Unpair from Server";
+"配对服务器" = "Pair Server";
+"一次性配对码" = "One-time Pairing Code";
+"设备名称" = "Device Name";
+"扫描配对二维码" = "Scan Pairing QR Code";
+"读取照片元数据" = "Read Photo Metadata";
+"读取相册" = "Read Albums";
+"传输受限缩略图" = "Transfer Restricted Thumbnails";
+"提交相册写入计划" = "Submit Album Write Plans";
+"授权能力" = "Granted Capabilities";
+"相册写入默认关闭。启用后，每次计划仍必须在本设备上批准。" = "Album writing is off by default. When enabled, each plan must still be approved on this device.";
+
+/* Library Access */
+"授权后才能浏览获准访问的照片。" = "Grant access to browse allowed photos.";
+"没有可见照片" = "No Visible Photos";
+"正在加载…" = "Loading…";
+"加载更多" = "Load More";
+"授权照片" = "Authorized Photos";
+"视频" = "Video";
+"已选择" = "Selected";
+"未选择" = "Not Selected";
+
+/* PhotoAccessLevel Titles */
+"尚未授权" = "Not Determined";
+"有限访问" = "Limited Access";
+"全部照片" = "Full Access";
+"已拒绝" = "Denied";
+"受系统限制" = "Restricted";
+
+/* ConnectionStatus Titles */
+"尚未配对" = "Not Paired";
+"正在连接" = "Connecting";
+"已连接" = "Connected";
+"已断开" = "Disconnected";
+"认证失败" = "Authentication Failed";
+
+/* Errors */
+"照片权限不足。" = "Photo permission is insufficient.";
+"照片库已经变化，请重新加载。" = "The photo library has changed. Please reload.";
+"存在多个名为“%@”的相册，请明确选择目标相册。" = "Multiple albums are named “%@”. Please select the target album explicitly.";
+"目标相册不可写。" = "The target album is not writable.";
+"无法创建目标相册。" = "The target album could not be created.";
+"无法安全保存设备凭据（Keychain %d）。" = "Device credentials could not be stored securely (Keychain %d).";
+"服务器拒绝配对。请检查地址、一次性配对码及其有效期。" = "The server rejected pairing. Check the address, one-time pairing code, and its expiration.";
+"资源不存在或不在当前授权范围内。" = "The item does not exist or is outside the current authorization scope.";
+"无法生成缩略图。" = "The thumbnail could not be generated.";
+"未命名相册" = "Untitled Album";
+"相册不存在或不在当前授权范围内。" = "The album does not exist or is outside the current authorization scope.";
+"服务器尚未确认拒绝结果，请保持连接后重试。" = "The server has not acknowledged the rejection. Stay connected and try again.";
+"计划已经过期，请重新创建。" = "The plan has expired. Please create it again.";
+"服务器尚未确认执行状态，照片库未被修改。" = "The server has not acknowledged execution. The photo library was not modified.";
+"缺少 asset_id。" = "asset_id is missing.";
+"缺少 album_id。" = "album_id is missing.";
+"用户已关闭缩略图传输。" = "Thumbnail transfer is disabled.";
+"无法编码缩略图。" = "The thumbnail could not be encoded.";
+"远程计划内容不完整。" = "The remote plan is incomplete.";
+"远程计划哈希不匹配。" = "The remote plan hash does not match.";
+"撤销计划内容不完整。" = "The undo plan is incomplete.";
+"撤销计划哈希不匹配。" = "The undo plan hash does not match.";
+"当前配对未授予能力：%@" = "The current pairing did not grant this capability: %@";
+"UI测试演示计划" = "UI Test Demo Plan";

@@ -1,0 +1,83 @@
+openapi: 3.1.0
+info:
+    title: Photos Bridge Server API
+    version: 0.1.0
+servers:
+    - url: /api/v1
+components:
+    securitySchemes:
+        apiKey:
+            type: http
+            scheme: bearer
+    schemas:
+        Error:
+            type: object
+            required: [error]
+            properties:
+                error:
+                    type: object
+                    required: [code]
+                    properties:
+                        code: { type: string }
+security:
+    - apiKey: []
+paths:
+    /devices:
+        get:
+            summary: List paired devices
+            responses:
+                "200": { description: Device list }
+    /devices/{device_id}/albums:
+        get:
+            summary: List albums through an online device
+            parameters:
+                - { name: device_id, in: path, required: true, schema: { type: string } }
+            responses:
+                "200": { description: Album list }
+                "503": { description: Device offline }
+    /devices/{device_id}/albums/{album_id}/assets:
+        get:
+            summary: List the asset identifiers in one album through an online device
+            parameters:
+                - { name: device_id, in: path, required: true, schema: { type: string } }
+                - { name: album_id, in: path, required: true, schema: { type: string } }
+            responses:
+                "200": { description: Album asset identifiers }
+                "503": { description: Device offline }
+    /devices/{device_id}/assets:
+        get:
+            summary: Page through an online device library snapshot
+            parameters:
+                - { name: device_id, in: path, required: true, schema: { type: string } }
+                - { name: snapshot_id, in: query, schema: { type: string } }
+                - { name: cursor, in: query, schema: { type: string } }
+                - { name: limit, in: query, schema: { type: integer, maximum: 500 } }
+            responses:
+                "200": { description: Asset page }
+    /plans:
+        post:
+            summary: Create an immutable album membership plan
+            responses:
+                "201": { description: Plan created }
+                "409": { description: Idempotency conflict }
+    /plans/{plan_id}/request-approval:
+        post:
+            summary: Deliver a plan for on-device approval
+            parameters:
+                - { name: plan_id, in: path, required: true, schema: { type: string } }
+            responses:
+                "202": { description: Awaiting device approval }
+    /operations/{operation_id}:
+        get:
+            summary: Read the durable operation result
+            parameters:
+                - { name: operation_id, in: path, required: true, schema: { type: string } }
+            responses:
+                "200": { description: Operation }
+    /batches/{batch_id}/undo-plans:
+        post:
+            summary: Request on-device approval to undo one batch
+            parameters:
+                - { name: batch_id, in: path, required: true, schema: { type: string } }
+            responses:
+                "202": { description: Undo awaiting approval }
