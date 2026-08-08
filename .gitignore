@@ -17,6 +17,13 @@ coverage/
 dist/
 package-lock.json
 
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+build/
+
 # Runtime data and secrets
 .env
 .env.*

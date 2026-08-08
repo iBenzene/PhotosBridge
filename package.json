@@ -8,6 +8,7 @@
     "scripts": {
         "build:server": "npm --workspace @photos-bridge/server run build",
         "generate:app-icon": "node scripts/generate-app-icon.mjs",
+        "test:retriever": "python -m pytest --rootdir apps/retriever apps/retriever/tests",
         "test:server": "npm --workspace @photos-bridge/server test",
         "dev:server": "npm --workspace @photos-bridge/server run dev",
         "lint": "eslint . --ext .ts,.js,.json,.cjs",
