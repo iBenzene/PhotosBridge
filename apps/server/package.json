@@ -7,7 +7,7 @@
         "node": ">=24"
     },
     "scripts": {
-        "dev": "tsx watch src/index.ts",
+        "dev": "tsx src/dev.ts",
         "start": "node dist/src/index.js",
         "build": "tsc -p tsconfig.json",
         "test": "node --import tsx --test tests/*.test.ts"
