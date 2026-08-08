@@ -13,23 +13,17 @@ import UIKit
 struct PhotosBridgeTests {
     @Test func writePlanDeduplicatesAndSortsAssets() {
         let plan = WritePlan(
-            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            id: "plan_1", contentHash: String(repeating: "a", count: 64), serverURL: nil,
             createdAt: Date(timeIntervalSince1970: 0),
             summary: "  本机验证  ",
             targetAlbumName: " Photos Bridge Test ",
+            createAlbumIfMissing: true,
             assetIDs: ["asset-b", "asset-a", "asset-b"]
         )
 
         #expect(plan.summary == "本机验证")
         #expect(plan.targetAlbumName == "Photos Bridge Test")
         #expect(plan.assetIDs == ["asset-a", "asset-b"])
-        #expect(plan.contentHash.count == 64)
-    }
-
-    @Test func writePlanHashIsIndependentOfAssetInputOrder() {
-        let first = WritePlan(summary: "test", targetAlbumName: "album", assetIDs: ["b", "a"])
-        let second = WritePlan(summary: "test", targetAlbumName: "album", assetIDs: ["a", "b", "a"])
-        #expect(first.contentHash == second.contentHash)
     }
 
     @Test func photoAccessOnlyAllowsAuthorizedStates() {
@@ -61,7 +55,7 @@ struct PhotosBridgeTests {
         #expect(try content.canonicalSHA256() == "ee93904abd462f0245f3cd569ace8a0fdeaee835d5ba6c8698bae14840999dd7")
     }
 
-    @Test func protocolEnvelopeAcceptsServerDatesWithFractionalSeconds() throws {
+    @Test @MainActor func protocolEnvelopeAcceptsServerDatesWithFractionalSeconds() throws {
         let data = Data(#"{"protocol_version":1,"message_id":"msg_1","correlation_id":null,"device_id":"device_1","type":"session.ready","sent_at":"2026-07-30T20:06:42.575Z","payload":{}}"#.utf8)
         let envelope = try ProtocolEnvelope.makeDecoder().decode(ProtocolEnvelope.self, from: data)
 
@@ -88,7 +82,8 @@ struct PhotosBridgeTests {
 
     @Test @MainActor func appModelDeduplicatesAssetsAcrossPages() async {
         let client = MockPhotoLibraryClient()
-        let model = AppModel(photoLibrary: client)
+        let (model, fileURL) = Self.makeTestModel(client: client)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
 
         await model.loadNextPage()
         await model.loadNextPage()
@@ -97,69 +92,28 @@ struct PhotosBridgeTests {
         #expect(model.nextCursor == nil)
     }
 
-    @Test @MainActor func deviceJournalRestoresPendingApprovalQueueAndCompletionReport() {
+    @Test @MainActor func deviceJournalRestoresPendingApprovalQueueAndSource() {
         let fileURL = FileManager.default.temporaryDirectory
             .appending(path: "photos-bridge-journal-\(UUID().uuidString).json")
         let journal = DeviceJournal(fileURL: fileURL)
-        let context = RemotePlanContext(planID: "plan_1", operationID: "op_1", contentHash: "abc")
-        let plan = WritePlan(summary: "test", targetAlbumName: "album", assetIDs: ["asset_1"])
+        let plan = Self.plan(
+            id: "plan_1", summary: "test", album: "album", assets: ["asset_1"],
+            serverURL: "http://192.168.0.101:8787"
+        )
         let result = OperationResult(
             id: UUID(), albumID: "album_1", albumName: "album",
-            counts: .init(requested: 1, added: 1, skippedExisting: 0, missing: 0, failed: 0),
-            addedAssetIDs: ["asset_1"], failedAssetIDs: []
+            addedAssetIDs: ["asset_1"],
+            alreadyPresentAssetIDs: [], missingAssetIDs: [], failedAssetIDs: []
         )
-        let pending = PendingWritePlan(plan: plan, remoteContext: context)
         journal.save(DeviceJournalState(
-            pendingPlans: [pending], pendingPlan: nil, remotePlanContext: nil, pendingUndo: nil,
-            lastResult: result, lastBatchID: "batch_1", lastUndoResult: nil,
-            activeOperation: context,
-            pendingOperationReport: OperationCompletionReport(context: context, result: result, batchID: "batch_1"),
-            pendingUndoReport: nil,
-            historyRecords: [HistoryRecord(result: result, batchID: "batch_1", undoResult: nil)]
+            pendingPlans: [plan], pendingHistoryAction: nil,
+            historyRecords: [HistoryRecord(result: result, undoResult: nil)]
         ))
 
         let restored = journal.load()
-        #expect(restored.pendingPlans == [pending])
-        #expect(restored.pendingOperationReport?.batchID == "batch_1")
-        #expect(restored.historyRecords?.count == 1)
-        try? FileManager.default.removeItem(at: fileURL)
-    }
-
-    @Test @MainActor func appModelMigratesLegacySinglePendingPlanIntoQueue() {
-        let fileURL = FileManager.default.temporaryDirectory
-            .appending(path: "photos-bridge-legacy-journal-\(UUID().uuidString).json")
-        let journal = DeviceJournal(fileURL: fileURL)
-        let plan = WritePlan(summary: "legacy", targetAlbumName: "album", assetIDs: ["asset_1"])
-        let context = RemotePlanContext(planID: "plan_legacy", operationID: "op_legacy", contentHash: "hash")
-        journal.save(DeviceJournalState(
-            pendingPlans: nil, pendingPlan: plan, remotePlanContext: context, pendingUndo: nil,
-            lastResult: nil, lastBatchID: nil, lastUndoResult: nil, activeOperation: nil,
-            pendingOperationReport: nil, pendingUndoReport: nil, historyRecords: []
-        ))
-
-        let model = AppModel(photoLibrary: MockPhotoLibraryClient(), journal: journal)
-        #expect(model.pendingPlans == [PendingWritePlan(plan: plan, remoteContext: context)])
-        #expect(journal.load().pendingPlan == nil)
-        #expect(journal.load().pendingPlans == model.pendingPlans)
-        try? FileManager.default.removeItem(at: fileURL)
-    }
-
-    @Test @MainActor func appModelMigratesLegacyPlanWhenStoredQueueIsEmpty() {
-        let fileURL = FileManager.default.temporaryDirectory
-            .appending(path: "photos-bridge-empty-queue-legacy-journal-\(UUID().uuidString).json")
-        let journal = DeviceJournal(fileURL: fileURL)
-        let plan = WritePlan(summary: "legacy", targetAlbumName: "album", assetIDs: ["asset_1"])
-        let context = RemotePlanContext(planID: "plan_legacy", operationID: "op_legacy", contentHash: "hash")
-        journal.save(DeviceJournalState(
-            pendingPlans: [], pendingPlan: plan, remotePlanContext: context, pendingUndo: nil,
-            lastResult: nil, lastBatchID: nil, lastUndoResult: nil, activeOperation: nil,
-            pendingOperationReport: nil, pendingUndoReport: nil, historyRecords: []
-        ))
-
-        let model = AppModel(photoLibrary: MockPhotoLibraryClient(), journal: journal)
-        #expect(model.pendingPlans == [PendingWritePlan(plan: plan, remoteContext: context)])
-        #expect(journal.load().pendingPlan == nil)
-        #expect(journal.load().pendingPlans == model.pendingPlans)
+        #expect(restored.pendingPlans == [plan])
+        #expect(restored.pendingPlans.first?.serverURL == "http://192.168.0.101:8787")
+        #expect(restored.historyRecords.count == 1)
         try? FileManager.default.removeItem(at: fileURL)
     }
 
@@ -169,18 +123,264 @@ struct PhotosBridgeTests {
         let journal = DeviceJournal(fileURL: fileURL)
         let model = AppModel(photoLibrary: MockPhotoLibraryClient(), journal: journal)
 
-        let plan1 = WritePlan(summary: "first", targetAlbumName: "First", assetIDs: ["asset-a"])
-        let plan2 = WritePlan(summary: "second", targetAlbumName: "Second", assetIDs: ["asset-b"])
-        model.pendingPlans = [PendingWritePlan(plan: plan2, remoteContext: nil), PendingWritePlan(plan: plan1, remoteContext: nil)]
+        let plan1 = Self.plan(id: "plan_1", summary: "first", album: "First", assets: ["asset-a"])
+        let plan2 = Self.plan(id: "plan_2", summary: "second", album: "Second", assets: ["asset-b"])
+        model.pendingPlans = [plan2, plan1]
 
-        #expect(model.pendingPlans.map(\.plan.targetAlbumName) == ["Second", "First"])
+        #expect(model.pendingPlans.map(\.targetAlbumName) == ["Second", "First"])
         try? FileManager.default.removeItem(at: fileURL)
     }
+
+    @Test @MainActor func remotePlanExecutesOfflineWithoutServerReporting() async {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appending(path: "photos-bridge-offline-plan-\(UUID().uuidString).json")
+        let journal = DeviceJournal(fileURL: fileURL)
+        let client = MockPhotoLibraryClient()
+        let model = AppModel(photoLibrary: client, journal: journal)
+        let plan = Self.plan(
+            id: "plan_1", summary: "remote", album: "Album", assets: ["asset-a"],
+            serverURL: "https://temporary.example"
+        )
+        model.pendingPlans = [plan]
+
+        await model.executePlan(id: plan.id)
+
+        #expect(client.lastAddedAssetIDs == ["asset-a"])
+        #expect(client.lastCreateIfMissing == true)
+        #expect(model.pendingPlans.isEmpty)
+        #expect(model.historyRecords.count == 1)
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    @Test @MainActor func planPreservesDoNotCreateAlbumPolicyOffline() async {
+        let client = MockPhotoLibraryClient()
+        let (model, fileURL) = Self.makeTestModel(client: client)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let plan = Self.plan(
+            id: "plan_existing_album_only", summary: "remote", album: "Existing",
+            assets: ["asset-a"], createIfMissing: false
+        )
+        model.pendingPlans = [plan]
+
+        await model.executePlan(id: plan.id)
+
+        #expect(client.lastCreateIfMissing == false)
+    }
+
+    @Test @MainActor func remotePlanCanBeRejectedOffline() {
+        let client = MockPhotoLibraryClient()
+        let (model, fileURL) = Self.makeTestModel(client: client)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let plan = Self.plan(
+            id: "plan_reject", summary: "remote", album: "Album", assets: ["asset-a"],
+            serverURL: "https://temporary.example"
+        )
+        model.pendingPlans = [plan]
+
+        model.rejectPlan(id: plan.id)
+
+        #expect(model.pendingPlans.isEmpty)
+    }
+
+    @Test @MainActor func localUndoCanBeRejectedOffline() {
+        let (model, fileURL) = Self.makeTestModel()
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let record = Self.undoneHistoryRecord()
+        model.historyRecords = [record]
+        model.pendingHistoryAction = .undo(record.id)
+
+        model.rejectPendingUndo()
+
+        #expect(model.pendingHistoryAction == nil)
+    }
+
+    @Test @MainActor func appModelDeletesHistoryRecord() {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appending(path: "photos-bridge-history-delete-\(UUID().uuidString).json")
+        let journal = DeviceJournal(fileURL: fileURL)
+        let model = AppModel(photoLibrary: MockPhotoLibraryClient(), journal: journal)
+
+        let result1 = OperationResult(
+            id: UUID(), albumID: "alb1", albumName: "Album1",
+            addedAssetIDs: ["a1"],
+            alreadyPresentAssetIDs: [], missingAssetIDs: [], failedAssetIDs: []
+        )
+        let result2 = OperationResult(
+            id: UUID(), albumID: "alb2", albumName: "Album2",
+            addedAssetIDs: ["a2"],
+            alreadyPresentAssetIDs: [], missingAssetIDs: [], failedAssetIDs: []
+        )
+        let record1 = HistoryRecord(result: result1, undoResult: nil)
+        let record2 = HistoryRecord(result: result2, undoResult: nil)
+
+        model.historyRecords = [record1, record2]
+
+        model.deleteHistoryRecord(id: record1.id)
+        #expect(model.historyRecords.count == 1)
+        #expect(model.historyRecords.first?.id == record2.id)
+        #expect(journal.load().historyRecords.count == 1)
+
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    @Test @MainActor func restorePlanMirrorsTheActualUndoWithoutMutatingHistory() {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appending(path: "photos-bridge-restore-plan-\(UUID().uuidString).json")
+        let journal = DeviceJournal(fileURL: fileURL)
+        let model = AppModel(photoLibrary: MockPhotoLibraryClient(), journal: journal)
+        let result = OperationResult(
+            id: UUID(), albumID: "album-original", albumName: "Renamed Album",
+            addedAssetIDs: ["a", "b", "c"],
+            alreadyPresentAssetIDs: [], missingAssetIDs: [], failedAssetIDs: []
+        )
+        let undo = UndoResult(
+            removedAssetIDs: ["a", "c"],
+            missingAssetIDs: [], failedAssetIDs: ["b"]
+        )
+        let record = HistoryRecord(result: result, undoResult: undo)
+        model.historyRecords = [record]
+
+        model.restoreHistoryRecord(id: record.id)
+
+        #expect(model.pendingPlans.isEmpty)
+        #expect(model.pendingHistoryAction == .restore(record.id))
+        #expect(model.historyRecords.first?.undoResult == undo)
+        #expect(model.historyRecords.first?.restoreResult == nil)
+        let restoredModel = AppModel(photoLibrary: MockPhotoLibraryClient(), journal: journal)
+        #expect(restoredModel.pendingHistoryAction == model.pendingHistoryAction)
+        #expect(restoredModel.historyRecords.first?.undoResult == undo)
+        try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    @Test @MainActor func cancellingRestoreKeepsTheUndoRestorable() {
+        let (model, fileURL) = Self.makeTestModel()
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let record = Self.undoneHistoryRecord()
+        model.historyRecords = [record]
+        model.restoreHistoryRecord(id: record.id)
+
+        model.rejectPendingRestore()
+
+        #expect(model.pendingHistoryAction == nil)
+        #expect(model.historyRecords.first?.isRestorable == true)
+        #expect(model.historyRecords.first?.undoResult == record.undoResult)
+    }
+
+    @Test @MainActor func executingRestoreUpdatesTheSameHistoryRecord() async {
+        let client = MockPhotoLibraryClient()
+        client.nextRestoreResult = RestoreResult(
+            addedAssetIDs: ["asset-a"], alreadyPresentAssetIDs: ["asset-b"],
+            missingAssetIDs: [], failedAssetIDs: []
+        )
+        let (model, fileURL) = Self.makeTestModel(client: client)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let record = Self.undoneHistoryRecord()
+        model.historyRecords = [record]
+        model.restoreHistoryRecord(id: record.id)
+
+        await model.executePendingRestore()
+
+        #expect(client.lastRestoreAlbumID == "album_1")
+        #expect(client.lastRestoreAssetIDs == ["asset-a", "asset-b"])
+        #expect(model.pendingHistoryAction == nil)
+        #expect(model.historyRecords.count == 1)
+        #expect(model.historyRecords.first?.undoResult == record.undoResult)
+        #expect(model.historyRecords.first?.restoreResult?.recoveredAssetIDs == ["asset-a", "asset-b"])
+        #expect(model.historyRecords.first?.isRestorable == false)
+        #expect(model.historyRecords.first?.isUndoable == true)
+    }
+
+    @Test @MainActor func planSourceUsesStoredServerAndNeverCurrentPairingFallback() {
+        let (model, fileURL) = Self.makeTestModel()
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let storedSource = Self.plan(
+            id: "plan_source", summary: "source", album: "Album", assets: ["asset-a"],
+            serverURL: "http://192.168.0.101:8787/"
+        )
+        let unknownSource = Self.plan(
+            id: "plan_unknown", summary: "source", album: "Album", assets: ["asset-a"]
+        )
+        let otherSource = Self.plan(
+            id: "plan_other", summary: "source", album: "Album", assets: ["asset-a"],
+            serverURL: "http://192.168.1.1:8787"
+        )
+
+        #expect(PlanApprovalView(model: model, plan: storedSource).sourceServerName == "http://192.168.0.101:8787")
+        #expect(PlanApprovalView(model: model, plan: otherSource).sourceServerName == "http://192.168.1.1:8787")
+        #expect(PlanApprovalView(model: model, plan: unknownSource).sourceServerName == String(localized: "未知来源"))
+    }
+
+    @Test @MainActor func partialRestoreRetriesOnlyUnrecoveredAssets() async {
+        let client = MockPhotoLibraryClient()
+        client.nextRestoreResult = RestoreResult(
+            addedAssetIDs: ["asset-a"], alreadyPresentAssetIDs: [],
+            missingAssetIDs: ["asset-b"], failedAssetIDs: []
+        )
+        let (model, fileURL) = Self.makeTestModel(client: client)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let record = Self.undoneHistoryRecord()
+        model.historyRecords = [record]
+        model.restoreHistoryRecord(id: record.id)
+        await model.executePendingRestore()
+
+        model.restoreHistoryRecord(id: record.id)
+
+        #expect(model.pendingHistoryAction == .restore(record.id))
+        #expect(model.historyRecords.first?.restorableAssetIDs == ["asset-b"])
+        #expect(model.historyRecords.first?.isRestorable == true)
+    }
+
+    @MainActor private static func makeTestModel() -> (AppModel, URL) {
+        makeTestModel(client: MockPhotoLibraryClient())
+    }
+
+    @MainActor private static func makeTestModel(client: MockPhotoLibraryClient) -> (AppModel, URL) {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appending(path: "photos-bridge-model-\(UUID().uuidString).json")
+        return (AppModel(photoLibrary: client, journal: DeviceJournal(fileURL: fileURL)), fileURL)
+    }
+
+    private static func undoneHistoryRecord() -> HistoryRecord {
+        let result = OperationResult(
+            id: UUID(), albumID: "album_1", albumName: "Album",
+            addedAssetIDs: ["asset-a", "asset-b"],
+            alreadyPresentAssetIDs: [], missingAssetIDs: [], failedAssetIDs: []
+        )
+        return HistoryRecord(
+            result: result,
+            undoResult: UndoResult(
+                removedAssetIDs: ["asset-a", "asset-b"],
+                missingAssetIDs: [], failedAssetIDs: []
+            )
+        )
+    }
+
+    private static func plan(
+        id: String,
+        summary: String,
+        album: String,
+        assets: [String],
+        serverURL: String? = nil,
+        createIfMissing: Bool = true
+    ) -> WritePlan {
+        WritePlan(
+            id: id, contentHash: String(repeating: "a", count: 64), serverURL: serverURL,
+            summary: summary, targetAlbumName: album,
+            createAlbumIfMissing: createIfMissing, assetIDs: assets
+        )
+    }
 }
+
+
 
 @MainActor
 private final class MockPhotoLibraryClient: PhotoLibraryClient {
     private var page = 0
+    var nextRestoreResult: RestoreResult?
+    private(set) var lastRestoreAssetIDs: [String]?
+    private(set) var lastRestoreAlbumID: String?
+    private(set) var lastAddedAssetIDs: [String]?
+    private(set) var lastCreateIfMissing: Bool?
 
     func authorizationLevel() -> PhotoAccessLevel { .full }
     func requestAuthorization() async -> PhotoAccessLevel { .full }
@@ -199,16 +399,27 @@ private final class MockPhotoLibraryClient: PhotoLibraryClient {
     func albums() async throws -> [AlbumDescriptor] { [] }
     func assetIDs(inAlbum albumID: String) async throws -> [String] { [] }
 
-    func add(assetIDs: [String], toAlbumNamed albumName: String) async throws -> OperationResult {
-        OperationResult(
+    func add(assetIDs: [String], toAlbumNamed albumName: String, createIfMissing: Bool) async throws -> OperationResult {
+        lastAddedAssetIDs = assetIDs
+        lastCreateIfMissing = createIfMissing
+        return OperationResult(
             id: UUID(), albumID: "album", albumName: albumName,
-            counts: .init(requested: assetIDs.count, added: assetIDs.count, skippedExisting: 0, missing: 0, failed: 0),
-            addedAssetIDs: assetIDs, failedAssetIDs: []
+            addedAssetIDs: assetIDs,
+            alreadyPresentAssetIDs: [], missingAssetIDs: [], failedAssetIDs: []
+        )
+    }
+
+    func restore(assetIDs: [String], toAlbumID albumID: String) async throws -> RestoreResult {
+        lastRestoreAssetIDs = assetIDs
+        lastRestoreAlbumID = albumID
+        return nextRestoreResult ?? RestoreResult(
+            addedAssetIDs: assetIDs, alreadyPresentAssetIDs: [],
+            missingAssetIDs: [], failedAssetIDs: []
         )
     }
 
     func remove(assetIDs: [String], fromAlbumID albumID: String) async throws -> UndoResult {
-        UndoResult(requested: assetIDs.count, removed: assetIDs.count, missing: 0, failed: 0, removedAssetIDs: assetIDs)
+        UndoResult(removedAssetIDs: assetIDs, missingAssetIDs: [], failedAssetIDs: [])
     }
 
     private func asset(_ id: String) -> AssetDescriptor {

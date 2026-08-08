@@ -40,10 +40,12 @@ describe("Photos Bridge Server", () => {
             .post("/api/v1/pairing-sessions")
             .set("Authorization", `Bearer ${adminKey}`)
             .expect(201);
+        assert.equal("qr_payload" in pairing.body, false);
+        assert.equal("pairing_session_id" in pairing.body, false);
 
         const body = {
             app_version: "0.1.0",
-            capabilities: ["library.metadata.read"],
+            capabilities: ["library.metadata.read", "library.metadata.read"],
             display_name: "Test iPhone",
             pairing_token: pairing.body.pairing_token,
             protocol_version: 1,
@@ -61,11 +63,12 @@ describe("Photos Bridge Server", () => {
             .expect(200);
         assert.equal(devices.body.devices.length, 1);
         assert.equal(devices.body.devices[0].display_name, "Test iPhone");
+        assert.deepEqual(devices.body.devices[0].capabilities, ["library.metadata.read"]);
         assert.equal(devices.body.devices[0].online, false);
     });
 
     it("returns a stable offline error for bridge reads", async () => {
-        const session = database.createPairingSession("https://bridge.test");
+        const session = database.createPairingSession();
         const paired = database.pairDevice({
             appVersion: "0.1.0",
             capabilities: ["library.metadata.read"],
@@ -81,7 +84,7 @@ describe("Photos Bridge Server", () => {
     });
 
     it("rejects bridge reads that were not granted during pairing", async () => {
-        const session = database.createPairingSession("https://bridge.test");
+        const session = database.createPairingSession();
         const paired = database.pairDevice({
             appVersion: "0.1.0",
             capabilities: [],
@@ -97,7 +100,7 @@ describe("Photos Bridge Server", () => {
     });
 
     it("lets an authenticated device revoke its own credential", async () => {
-        const session = database.createPairingSession("https://bridge.test");
+        const session = database.createPairingSession();
         const paired = database.pairDevice({
             appVersion: "0.1.0",
             capabilities: [],

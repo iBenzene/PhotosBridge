@@ -18,6 +18,7 @@ protocol PhotoLibraryClient: AnyObject {
     func thumbnail(for assetID: String, targetSize: CGSize, allowsNetwork: Bool) async throws -> UIImage
     func albums() async throws -> [AlbumDescriptor]
     func assetIDs(inAlbum albumID: String) async throws -> [String]
-    func add(assetIDs: [String], toAlbumNamed albumName: String) async throws -> OperationResult
+    func add(assetIDs: [String], toAlbumNamed albumName: String, createIfMissing: Bool) async throws -> OperationResult
+    func restore(assetIDs: [String], toAlbumID albumID: String) async throws -> RestoreResult
     func remove(assetIDs: [String], fromAlbumID albumID: String) async throws -> UndoResult
 }

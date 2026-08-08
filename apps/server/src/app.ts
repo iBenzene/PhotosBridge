@@ -9,6 +9,8 @@ import { PairingError, PhotosBridgeDatabase } from "./database.js";
 import { DeviceOfflineError, DeviceResponseError, DeviceTimeoutError, type DeviceHub } from "./device-hub.js";
 import { PlanError, PlanService, type PlanInput } from "./plans.js";
 
+const DEFAULT_DELIVERY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 export type AppDependencies = {
     config: ServerConfig;
     database: PhotosBridgeDatabase;
@@ -18,13 +20,6 @@ export type AppDependencies = {
 export const createApp = ({ config, database, hub }: AppDependencies): express.Express => {
     const app = express();
     const plans = new PlanService(database);
-    hub.onEvent((type, payload) => plans.handleDeviceEvent(type, payload));
-    hub.onResponse((requestType, responseType, payload) => {
-        if (responseType.endsWith(".error")) return;
-        const value = payload as Record<string, unknown>;
-        if (requestType === "plans.approval.request") plans.markAwaitingApproval(String(value.plan_id ?? ""));
-        if (requestType === "undo.approval.request") plans.markUndoAwaitingApproval(String(value.undo_plan_id ?? ""));
-    });
     app.disable("x-powered-by");
     app.use(express.json({ limit: "1mb" }));
     app.use(rateLimit(config.rateLimitPerMinute ?? 300, 60_000));
@@ -42,17 +37,10 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
         rateLimit(10, 60_000),
         requireScope(database, "admin"),
         (_request, response) => {
-            const session = database.createPairingSession(config.publicBaseURL);
+            const session = database.createPairingSession();
             response.status(201).json({
                 expires_at: session.expiresAt,
-                pairing_session_id: session.id,
                 pairing_token: session.token,
-                qr_payload: {
-                    expires_at: session.expiresAt,
-                    pairing_token: session.token,
-                    server_url: config.publicBaseURL,
-                    version: 1,
-                },
                 server_url: config.publicBaseURL,
             });
         }
@@ -94,7 +82,6 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
             return response.status(201).json({
                 device_id: credentials.deviceID,
                 device_secret: credentials.deviceSecret,
-                protocol_version: 1,
             });
         } catch (error) {
             return next(error);
@@ -178,7 +165,7 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
 
     app.post("/api/v1/plans", requireScope(database, "plans.write"), (request, response, next) => {
         try {
-            response.status(201).json(plans.create(request.body as PlanInput, String(response.locals.apiKeyID)));
+            response.status(201).json(plans.create(request.body as PlanInput));
         } catch (error) {
             next(error);
         }
@@ -188,69 +175,22 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
         if (!plan) return response.status(404).json({ error: { code: "PLAN_NOT_FOUND" } });
         return response.json(plan);
     });
-    app.post(
-        "/api/v1/plans/:planID/request-approval",
-        requireScope(database, "plans.write"),
-        async (request, response, next) => {
-            try {
-                const prepared = plans.prepareApproval(String(request.params.planID));
-                const commandID = hub.enqueue(
-                    prepared.plan.device_id,
-                    "plans.approval.request",
-                    { ...prepared.plan, operation_id: prepared.operation_id },
-                    prepared.plan.expires_at
-                );
-                response.status(202).json({
-                    ...plans.get(prepared.plan.plan_id),
-                    command_id: commandID,
-                    operation_id: prepared.operation_id,
-                });
-            } catch (error) {
-                next(error);
-            }
-        }
-    );
-    app.post("/api/v1/plans/:planID/cancel", requireScope(database, "plans.write"), (request, response, next) => {
+    app.post("/api/v1/plans/:planID/deliver", requireScope(database, "plans.write"), (request, response, next) => {
         try {
-            plans.cancel(String(request.params.planID));
-            response.json(plans.get(String(request.params.planID)));
+            const planID = String(request.params.planID);
+            const plan = plans.get(planID);
+            if (!plan) throw new PlanError("PLAN_NOT_FOUND", 404);
+            const deliveryExpiresAt = new Date(Date.now() + DEFAULT_DELIVERY_TTL_MS).toISOString();
+            response.status(202).json(hub.enqueuePlanDelivery(planID, deliveryExpiresAt));
         } catch (error) {
             next(error);
         }
     });
-    app.get("/api/v1/operations/:operationID", requireScope(database, "plans.write"), (request, response) => {
-        const operation = plans.getOperation(String(request.params.operationID));
-        if (!operation) return response.status(404).json({ error: { code: "OPERATION_NOT_FOUND" } });
-        return response.json(operation);
+    app.get("/api/v1/plans/:planID/delivery", requireScope(database, "plans.write"), (request, response) => {
+        const delivery = hub.getLatestPlanDelivery(String(request.params.planID));
+        if (!delivery) return response.status(404).json({ error: { code: "DELIVERY_NOT_FOUND" } });
+        return response.json(delivery);
     });
-    app.post(
-        "/api/v1/batches/:batchID/undo-plans",
-        requireScope(database, "plans.write"),
-        async (request, response, next) => {
-            try {
-                const undo = plans.createUndo(String(request.params.batchID));
-                if (undo.status === "completed") {
-                    response.status(200).json(undo);
-                    return;
-                }
-                const commandID = hub.enqueue(
-                    undo.device_id,
-                    "undo.approval.request",
-                    undo,
-                    new Date(Date.now() + 15 * 60 * 1000).toISOString()
-                );
-                response.status(202).json({ ...plans.getUndo(undo.undo_plan_id), command_id: commandID });
-            } catch (error) {
-                next(error);
-            }
-        }
-    );
-    app.get("/api/v1/undo-plans/:undoID", requireScope(database, "plans.write"), (request, response) => {
-        const undo = plans.getUndo(String(request.params.undoID));
-        if (!undo) return response.status(404).json({ error: { code: "UNDO_PLAN_NOT_FOUND" } });
-        return response.json(undo);
-    });
-
     app.use((_request, response) => response.status(404).json({ error: { code: "NOT_FOUND" } }));
     app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
         if (error instanceof PairingError) return response.status(error.status).json({ error: { code: error.code } });
@@ -275,7 +215,6 @@ const requireScope =
         if (!principal.scopes.includes("admin") && !principal.scopes.includes(scope)) {
             return void response.status(403).json({ error: { code: "CAPABILITY_NOT_GRANTED" } });
         }
-        response.locals.apiKeyID = principal.id;
         next();
     };
 
@@ -319,7 +258,6 @@ const presentDevice = (
         last_seen_at: device.last_seen_at,
         online,
         paired_at: device.paired_at,
-        protocol_version: device.protocol_version,
     };
 };
 

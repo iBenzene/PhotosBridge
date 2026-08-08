@@ -70,8 +70,8 @@ struct AppRootView: View {
         )) { Button("好", role: .cancel) {} } message: {
             Text(model.errorMessage ?? "未知错误")
         }
-        .sheet(item: $model.pendingUndo) { undo in
-            UndoApprovalView(model: model, undo: undo)
+        .sheet(item: $model.pendingHistoryAction) { action in
+            HistoryActionApprovalView(model: model, action: action)
         }
     }
 

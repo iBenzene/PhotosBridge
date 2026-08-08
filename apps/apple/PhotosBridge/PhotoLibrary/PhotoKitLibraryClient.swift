@@ -143,10 +143,10 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
         return identifiers
     }
 
-    func add(assetIDs: [String], toAlbumNamed albumName: String) async throws -> OperationResult {
+    func add(assetIDs: [String], toAlbumNamed albumName: String, createIfMissing: Bool) async throws -> OperationResult {
         guard authorizationLevel().canRead else { throw PhotoLibraryFailure.permissionInsufficient }
         let uniqueIDs = Array(Set(assetIDs)).sorted()
-        let album = try await resolveOrCreateAlbum(named: albumName)
+        let album = try await resolveAlbum(named: albumName, createIfMissing: createIfMissing)
         guard album.canPerform(.addContent) else { throw PhotoLibraryFailure.albumNotWritable }
 
         let fetchedAssets = PHAsset.fetchAssets(withLocalIdentifiers: uniqueIDs, options: nil)
@@ -159,13 +159,13 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
         var existingIDs = Set<String>()
         existingResult.enumerateObjects { asset, _, _ in existingIDs.insert(asset.localIdentifier) }
         let additions = found.filter { !existingIDs.contains($0.localIdentifier) }
-        let skipped = found.count - additions.count
 
         guard !additions.isEmpty else {
             return OperationResult(
                 id: UUID(), albumID: album.localIdentifier, albumName: albumName,
-                counts: .init(requested: uniqueIDs.count, added: 0, skippedExisting: skipped, missing: missingIDs.count, failed: 0),
-                addedAssetIDs: [], failedAssetIDs: []
+                addedAssetIDs: [],
+                alreadyPresentAssetIDs: found.filter { existingIDs.contains($0.localIdentifier) }.map(\.localIdentifier).sorted(),
+                missingAssetIDs: missingIDs, failedAssetIDs: []
             )
         }
 
@@ -188,11 +188,53 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
         }
         return OperationResult(
             id: UUID(), albumID: album.localIdentifier, albumName: albumName,
-            counts: .init(
-                requested: uniqueIDs.count, added: addedIDs.count, skippedExisting: skipped,
-                missing: missingIDs.count, failed: failedIDs.count
-            ),
-            addedAssetIDs: addedIDs, failedAssetIDs: failedIDs
+            addedAssetIDs: addedIDs.sorted(),
+            alreadyPresentAssetIDs: found.filter { existingIDs.contains($0.localIdentifier) }.map(\.localIdentifier).sorted(),
+            missingAssetIDs: missingIDs, failedAssetIDs: failedIDs.sorted()
+        )
+    }
+
+    func restore(assetIDs: [String], toAlbumID albumID: String) async throws -> RestoreResult {
+        guard authorizationLevel().canRead else { throw PhotoLibraryFailure.permissionInsufficient }
+        guard let album = PHAssetCollection.fetchAssetCollections(
+            withLocalIdentifiers: [albumID], options: nil
+        ).firstObject else {
+            throw PhotoLibraryFailure.photoKit(String(localized: "相册不存在或不在当前授权范围内。"))
+        }
+        guard album.canPerform(.addContent) else { throw PhotoLibraryFailure.albumNotWritable }
+
+        let uniqueIDs = Array(Set(assetIDs)).sorted()
+        let fetchedAssets = PHAsset.fetchAssets(withLocalIdentifiers: uniqueIDs, options: nil)
+        var found: [PHAsset] = []
+        fetchedAssets.enumerateObjects { asset, _, _ in found.append(asset) }
+        let foundIDs = Set(found.map(\.localIdentifier))
+        let missingIDs = uniqueIDs.filter { !foundIDs.contains($0) }
+
+        let members = PHAsset.fetchAssets(in: album, options: nil)
+        var memberIDs = Set<String>()
+        members.enumerateObjects { asset, _, _ in memberIDs.insert(asset.localIdentifier) }
+        let alreadyPresentIDs = uniqueIDs.filter { foundIDs.contains($0) && memberIDs.contains($0) }
+        let additions = found.filter { !memberIDs.contains($0.localIdentifier) }
+
+        var addedIDs: [String] = []
+        var failedIDs: [String] = []
+        for start in stride(from: 0, to: additions.count, by: 100) {
+            let batch = Array(additions[start..<min(start + 100, additions.count)])
+            do {
+                try await add(batch, to: album)
+                addedIDs.append(contentsOf: batch.map(\.localIdentifier))
+            } catch {
+                for asset in batch {
+                    do { try await add([asset], to: album); addedIDs.append(asset.localIdentifier) }
+                    catch { failedIDs.append(asset.localIdentifier) }
+                }
+            }
+        }
+        return RestoreResult(
+            addedAssetIDs: addedIDs.sorted(),
+            alreadyPresentAssetIDs: alreadyPresentIDs.sorted(),
+            missingAssetIDs: missingIDs.sorted(),
+            failedAssetIDs: failedIDs.sorted()
         )
     }
 
@@ -205,12 +247,16 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
         var memberByID: [String: PHAsset] = [:]
         members.enumerateObjects { asset, _, _ in memberByID[asset.localIdentifier] = asset }
         let removable = uniqueIDs.compactMap { memberByID[$0] }
-        let missing = uniqueIDs.count - removable.count
+        let removableIDs = Set(removable.map(\.localIdentifier))
+        let missingIDs = uniqueIDs.filter { !removableIDs.contains($0) }
         guard !removable.isEmpty else {
-            return UndoResult(requested: uniqueIDs.count, removed: 0, missing: missing, failed: 0, removedAssetIDs: [])
+            return UndoResult(
+                removedAssetIDs: [],
+                missingAssetIDs: missingIDs, failedAssetIDs: []
+            )
         }
         var removedIDs: [String] = []
-        var failed = 0
+        var failedIDs: [String] = []
         for start in stride(from: 0, to: removable.count, by: 100) {
             let batch = Array(removable[start..<min(start + 100, removable.count)])
             do {
@@ -219,13 +265,13 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
             } catch {
                 for asset in batch {
                     do { try await remove([asset], from: album); removedIDs.append(asset.localIdentifier) }
-                    catch { failed += 1 }
+                    catch { failedIDs.append(asset.localIdentifier) }
                 }
             }
         }
         return UndoResult(
-            requested: uniqueIDs.count, removed: removedIDs.count, missing: missing,
-            failed: failed, removedAssetIDs: removedIDs
+            removedAssetIDs: removedIDs.sorted(),
+            missingAssetIDs: missingIDs, failedAssetIDs: failedIDs.sorted()
         )
     }
 
@@ -233,13 +279,14 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
         Task { @MainActor [weak self] in self?.snapshot = nil }
     }
 
-    private func resolveOrCreateAlbum(named name: String) async throws -> PHAssetCollection {
+    private func resolveAlbum(named name: String, createIfMissing: Bool) async throws -> PHAssetCollection {
         let normalized = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let options = PHFetchOptions()
         options.predicate = NSPredicate(format: "title == %@", normalized)
         let matches = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .albumRegular, options: options)
         if matches.count > 1 { throw PhotoLibraryFailure.albumAmbiguous(normalized) }
         if let existing = matches.firstObject { return existing }
+        guard createIfMissing else { throw PhotoLibraryFailure.albumNotFound }
 
         var placeholder: PHObjectPlaceholder?
         try await PHPhotoLibrary.shared().performChanges {

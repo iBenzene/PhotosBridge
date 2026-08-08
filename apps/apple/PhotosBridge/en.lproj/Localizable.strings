@@ -9,10 +9,8 @@
 "相册" = "Album";
 "候选照片" = "Candidate Photos";
 "来源" = "Source";
-"未知服务器" = "Unknown Server";
+"未知来源" = "Unknown Source";
 "创建时间" = "Created At";
-"有效期" = "Expires At";
-"已过期" = "Expired";
 "计划哈希" = "Plan Hash";
 "写入计划" = "Write Plan";
 "说明" = "Summary";
@@ -44,6 +42,10 @@
 "撤销只会移除本批次新增的相册成员关系，不会删除原始照片，也不会影响其他相册。" = "Undo only removes album membership added in this batch. Original photos and other albums will not be affected.";
 "批准撤销计划" = "Approve Undo Plan";
 "批准并撤销" = "Approve & Undo";
+"恢复范围" = "Restore Scope";
+"恢复只会重新加入本次撤销实际移除的相册成员关系，并写回原相册。" = "Restore only re-adds album memberships actually removed by this undo, to the original album.";
+"批准恢复撤销" = "Approve Undo Recovery";
+"批准并恢复" = "Approve & Restore";
 
 /* History */
 "暂无历史" = "No History";
@@ -60,8 +62,17 @@
 "撤销失败" = "Undo Failed";
 "撤销结果" = "Undo Result";
 "创建撤销计划" = "Create Undo Plan";
+"恢复" = "Restore";
+"删除历史记录" = "Delete History Record";
+"确定要删除该历史记录吗？" = "Are you sure you want to delete this history record?";
 "历史详情" = "History Detail";
 "已撤销 (%lld张)" = "Undone (%lld)";
+"已恢复相册关系" = "Restored Memberships";
+"恢复失败" = "Restore Failed";
+"恢复缺失" = "Restore Missing";
+"恢复结果" = "Restore Result";
+"已恢复 (%lld张)" = "Restored (%lld)";
+"历史记录不存在" = "History Record Not Found";
 
 /* Settings */
 "照片" = "Photos";
@@ -93,8 +104,6 @@
 "加载更多" = "Load More";
 "授权照片" = "Authorized Photos";
 "视频" = "Video";
-"已选择" = "Selected";
-"未选择" = "Not Selected";
 
 /* PhotoAccessLevel Titles */
 "尚未授权" = "Not Determined";
@@ -115,6 +124,7 @@
 "照片库已经变化，请重新加载。" = "The photo library has changed. Please reload.";
 "存在多个名为“%@”的相册，请明确选择目标相册。" = "Multiple albums are named “%@”. Please select the target album explicitly.";
 "目标相册不可写。" = "The target album is not writable.";
+"目标相册不存在，且计划不允许创建相册。" = "The target album does not exist and the plan does not allow creating it.";
 "无法创建目标相册。" = "The target album could not be created.";
 "无法安全保存设备凭据（Keychain %d）。" = "Device credentials could not be stored securely (Keychain %d).";
 "服务器拒绝配对。请检查地址、一次性配对码及其有效期。" = "The server rejected pairing. Check the address, one-time pairing code, and its expiration.";
@@ -122,16 +132,12 @@
 "无法生成缩略图。" = "The thumbnail could not be generated.";
 "未命名相册" = "Untitled Album";
 "相册不存在或不在当前授权范围内。" = "The album does not exist or is outside the current authorization scope.";
-"服务器尚未确认拒绝结果，请保持连接后重试。" = "The server has not acknowledged the rejection. Stay connected and try again.";
-"计划已经过期，请重新创建。" = "The plan has expired. Please create it again.";
-"服务器尚未确认执行状态，照片库未被修改。" = "The server has not acknowledged execution. The photo library was not modified.";
 "缺少 asset_id。" = "asset_id is missing.";
 "缺少 album_id。" = "album_id is missing.";
 "用户已关闭缩略图传输。" = "Thumbnail transfer is disabled.";
 "无法编码缩略图。" = "The thumbnail could not be encoded.";
 "远程计划内容不完整。" = "The remote plan is incomplete.";
 "远程计划哈希不匹配。" = "The remote plan hash does not match.";
-"撤销计划内容不完整。" = "The undo plan is incomplete.";
-"撤销计划哈希不匹配。" = "The undo plan hash does not match.";
+"远程计划包含无效的资源 ID。" = "The remote plan contains an invalid asset ID.";
 "当前配对未授予能力：%@" = "The current pairing did not grant this capability: %@";
 "UI测试演示计划" = "UI Test Demo Plan";

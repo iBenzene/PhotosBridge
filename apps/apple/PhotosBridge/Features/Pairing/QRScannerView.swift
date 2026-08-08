@@ -12,7 +12,7 @@ import VisionKit
 struct PairingQRCode: Decodable {
     let serverURL: URL
     let pairingToken: String
-    let expiresAt: Date?
+    let expiresAt: Date
 
     enum CodingKeys: String, CodingKey {
         case serverURL = "server_url"
@@ -29,15 +29,13 @@ struct PairingQRCode: Decodable {
         self.serverURL = url
         self.pairingToken = try container.decode(String.self, forKey: .pairingToken).trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if let dateString = try? container.decode(String.self, forKey: .expiresAt) {
-            let f1 = ISO8601DateFormatter()
-            f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let f2 = ISO8601DateFormatter()
-            f2.formatOptions = [.withInternetDateTime]
-            self.expiresAt = f1.date(from: dateString) ?? f2.date(from: dateString)
-        } else {
-            self.expiresAt = nil
+        let dateString = try container.decode(String.self, forKey: .expiresAt)
+        guard let expiresAt = ProtocolEnvelope.parseDate(dateString) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .expiresAt, in: container, debugDescription: "Invalid expiration date"
+            )
         }
+        self.expiresAt = expiresAt
     }
 }
 
@@ -89,9 +87,7 @@ struct QRScannerView: UIViewControllerRepresentable {
                       let value = barcode.payloadStringValue,
                       let data = value.data(using: .utf8) else { continue }
                 guard let payload = try? JSONDecoder().decode(PairingQRCode.self, from: data) else { continue }
-                if let expiresAt = payload.expiresAt, expiresAt <= Date() {
-                    continue
-                }
+                if payload.expiresAt <= Date() { continue }
                 scanner.stopScanning()
                 parent.onResult(payload)
                 return

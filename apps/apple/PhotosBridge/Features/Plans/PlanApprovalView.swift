@@ -9,14 +9,14 @@ import SwiftUI
 
 struct PlanApprovalView: View {
     let model: AppModel
-    let item: PendingWritePlan
+    let plan: WritePlan
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    private var plan: WritePlan { item.plan }
-    private var sourceServerName: String {
-        let rawURL: String? = item.remoteContext?.serverURL ?? model.serverConnection.server?.baseURL.absoluteString
-        guard let rawURL, !rawURL.isEmpty else { return String(localized: "未知服务器") }
+    var sourceServerName: String {
+        guard let rawURL = plan.serverURL, !rawURL.isEmpty else {
+            return String(localized: "未知来源")
+        }
         return rawURL.hasSuffix("/") ? String(rawURL.dropLast()) : rawURL
     }
     private var photoColumns: [GridItem] {
@@ -33,14 +33,11 @@ struct PlanApprovalView: View {
                     VStack(spacing: 12) {
                         LabeledContent("相册", value: plan.targetAlbumName)
                         LabeledContent("候选照片", value: "\(plan.assetIDs.count)")
+                        LabeledContent("相册不存在时", value: plan.createAlbumIfMissing ? "创建相册" : "停止执行")
                         LabeledContent("来源", value: sourceServerName)
                         LabeledContent("创建时间") { Text(plan.createdAt, style: .date) }
-                        LabeledContent("有效期") {
-                            if plan.isExpired { Text("已过期").foregroundStyle(.red) }
-                            else { Text(plan.expiresAt, style: .relative) }
-                        }
                         LabeledContent("计划哈希") {
-                            Text(item.remoteContext?.contentHash ?? plan.contentHash)
+                            Text(plan.contentHash)
                                 .font(.caption.monospaced())
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.trailing)
@@ -86,11 +83,11 @@ struct PlanApprovalView: View {
             ToolbarItem(placement: .confirmationAction) {
                 Button("批准并执行") {
                     Task {
-                        await model.executePlan(id: item.id)
-                        if !model.pendingPlans.contains(where: { $0.id == item.id }) { dismiss() }
+                        await model.executePlan(id: plan.id)
+                        if !model.pendingPlans.contains(where: { $0.id == plan.id }) { dismiss() }
                     }
                 }
-                .disabled(model.isLoading || plan.isExpired || !model.authorization.canRead)
+                .disabled(model.isLoading || !model.authorization.canRead)
             }
         }
     }
@@ -112,22 +109,20 @@ struct PendingPlansView: View {
                         }
                     }
                     Section {
-                        ForEach(model.pendingPlans) { item in
+                        ForEach(model.pendingPlans) { plan in
                             NavigationLink {
-                                PlanApprovalView(model: model, item: item)
+                                PlanApprovalView(model: model, plan: plan)
                             } label: {
-                                PendingPlanRow(item: item)
+                                PendingPlanRow(plan: plan)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
-                                    Task {
-                                        await model.rejectPlan(id: item.id)
-                                    }
+                                    model.rejectPlan(id: plan.id)
                                 } label: {
                                     Label("拒绝", systemImage: "trash")
                                 }
                             }
-                            .accessibilityIdentifier("pending-plan-\(item.id.uuidString)")
+                            .accessibilityIdentifier("pending-plan-\(plan.id)")
                         }
                     } header: {
                         frame(height: 6)
@@ -164,44 +159,30 @@ struct PendingPlansView: View {
 }
 
 private struct PendingPlanRow: View {
-    let item: PendingWritePlan
+    let plan: WritePlan
 
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(item.plan.isExpired ? Color.red.opacity(0.12) : Color.blue.opacity(0.12))
+                    .fill(Color.blue.opacity(0.12))
                     .frame(width: 40, height: 40)
 
-                Image(systemName: item.plan.isExpired ? "clock.badge.exclamationmark" : "checklist")
+                Image(systemName: "checklist")
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(item.plan.isExpired ? Color.red : Color.blue)
+                    .foregroundStyle(Color.blue)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(item.plan.targetAlbumName)
+                    Text(plan.targetAlbumName)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.primary)
 
-                    Spacer()
-
-                    if item.plan.isExpired {
-                        Text("已过期")
-                            .font(.caption2.weight(.medium))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.red.opacity(0.15), in: Capsule())
-                            .foregroundStyle(.red)
-                    } else {
-                        Text(item.plan.expiresAt, style: .relative)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
                 }
 
-                if !item.plan.summary.isEmpty {
-                    Text(item.plan.summary)
+                if !plan.summary.isEmpty {
+                    Text(plan.summary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -212,7 +193,7 @@ private struct PendingPlanRow: View {
                     Text(
                         String.localizedStringWithFormat(
                             String(localized: "%lld 张照片"),
-                            Int64(item.plan.assetIDs.count)
+                            Int64(plan.assetIDs.count)
                         )
                     )
                 }
@@ -221,19 +202,6 @@ private struct PendingPlanRow: View {
             }
         }
         .padding(.vertical, 4)
-    }
-}
-
-private struct MetadataValue: View {
-    let systemImage: String
-    let text: String
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: systemImage)
-            Text(text)
-        }
-        .fixedSize(horizontal: true, vertical: false)
     }
 }
 

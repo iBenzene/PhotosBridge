@@ -4,22 +4,10 @@
     "title": "Photos Bridge immutable write plan",
     "type": "object",
     "additionalProperties": false,
-    "required": [
-        "plan_id",
-        "device_id",
-        "idempotency_key",
-        "summary",
-        "target_album",
-        "asset_ids",
-        "content_hash",
-        "status",
-        "created_at",
-        "expires_at"
-    ],
+    "required": ["plan_id", "device_id", "summary", "target_album", "asset_ids", "content_hash", "created_at"],
     "properties": {
         "plan_id": { "type": "string", "pattern": "^plan_" },
         "device_id": { "type": "string", "pattern": "^device_" },
-        "idempotency_key": { "type": "string", "minLength": 1, "maxLength": 200 },
         "summary": { "type": "string", "maxLength": 500 },
         "target_album": {
             "type": "object",
@@ -38,23 +26,6 @@
             "items": { "type": "string", "minLength": 1 }
         },
         "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "status": {
-            "enum": [
-                "draft",
-                "awaiting_device",
-                "awaiting_approval",
-                "approved",
-                "executing",
-                "completed",
-                "completed_with_errors",
-                "failed",
-                "unknown",
-                "rejected",
-                "expired",
-                "cancelled"
-            ]
-        },
-        "created_at": { "type": "string", "format": "date-time" },
-        "expires_at": { "type": "string", "format": "date-time" }
+        "created_at": { "type": "string", "format": "date-time" }
     }
 }

@@ -22,9 +22,9 @@ Every device message uses the following envelope:
 }
 ```
 
-Unknown versions and message types are rejected explicitly. Write messages
-also bind a plan ID, canonical SHA-256 plan hash, operation ID, and idempotency
-key. A timeout means the result is unknown, not that a write is safe to repeat.
+Unknown versions and message types are rejected explicitly. Plan delivery binds
+the immutable plan ID, target device, and canonical SHA-256 content hash. The
+device receipt only confirms durable local storage.
 
 ## Capabilities
 
@@ -39,22 +39,19 @@ current profile.
 
 Capabilities are selected during pairing. Album write capabilities default to
 off, and enabling them never bypasses per-plan device approval. Both protocol
-peers enforce the stored capability for every command; a declared but ungranted
+peers enforce the stored capability for every applicable request; a declared but ungranted
 capability produces `CAPABILITY_NOT_GRANTED`.
 
 ## Transport and recovery
 
 The Apple client opens WSS only while iOS allows it to run. The Server stores
-approval and undo commands in SQLite before delivery. A queued or sent command
-is redelivered after device or Server restart until the device returns a
-correlated receipt. Read requests are not queued: an offline device produces
-`DEVICE_OFFLINE` rather than an empty library.
-
-Device events receive an `event.ack` correlated to their message ID. The client
-persists completion reports until that acknowledgement arrives. If it is
-terminated after recording an operation as prepared but before recording the
-PhotoKit result, it reports `operation.unknown` and never blindly repeats the
-write.
+plan deliveries in SQLite and redelivers them after device or Server
+restart until the device returns a correlated receipt confirming that the plan
+was validated and durably stored. That receipt ends the Server's responsibility
+for the plan. Approval, rejection, execution, undo, restore, and their history
+remain entirely on the device and are never reported back to the Server. Read
+requests are not queued: an offline device produces `DEVICE_OFFLINE` rather
+than an empty library.
 
 ## Protocol Messages
 
@@ -64,15 +61,7 @@ write.
 - `assets.thumbnail.request` / `assets.thumbnail.response`
 - `albums.list.request` / `albums.list.response`
 - `albums.assets.request` / `albums.assets.response`
-- `plans.approval.request` / `plans.approval.response`
-- `operation.executing`
-- `operation.completed`
-- `operation.unknown`
-- `plan.rejected`
-- `undo.approval.request` / `undo.approval.response`
-- `undo.completed`
-- `undo.rejected`
-- `event.ack`
+- `plans.delivery.request` / `plans.delivery.response`
 
 ## Pagination
 
@@ -82,7 +71,7 @@ under limited Photo access are not reported as deletions.
 
 ## Plan canonicalization
 
-Plan and undo hashes are SHA-256 over canonical JSON with recursively sorted
+Plan hashes are SHA-256 over canonical JSON with recursively sorted
 object keys, compact separators, UTF-8 encoding, and stable array order. Asset
 IDs are deduplicated and sorted before hashing. The device reconstructs and
 verifies the same canonical content before presenting approval.

@@ -104,7 +104,7 @@ const startServer = async (): Promise<void> => {
         console.log(`--------------------------------------------------------------------`);
 
         // Automatically create a pairing session (valid for 24 hours)
-        const session = database.createPairingSession(config.publicBaseURL, 86400);
+        const session = database.createPairingSession(86400);
 
         const qrPayload = {
             expires_at: session.expiresAt,

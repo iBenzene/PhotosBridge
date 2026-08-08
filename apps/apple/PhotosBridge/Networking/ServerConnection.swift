@@ -25,16 +25,13 @@ final class ServerConnection {
         }
     }
     private(set) var server: PairedServer?
-    private(set) var lastConnectedAt: Date?
     var onEnvelope: ((ProtocolEnvelope) async -> Void)?
-    var onConnected: (() async -> Void)?
 
     private var socket: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
     private var activeSecret: String?
-    private var eventAcknowledgements: [String: CheckedContinuation<Bool, Never>] = [:]
 
     func pair(baseURL: URL, token: String, displayName: String, capabilities: [String]) async throws -> (PairedServer, String) {
         let endpoint = baseURL.appending(path: "/device/v1/pair")
@@ -148,34 +145,6 @@ final class ServerConnection {
         }
     }
 
-    func sendEvent(type: String, payload: JSONValue) async -> Bool {
-        guard let socket, let server else { return false }
-        let messageID = "msg_\(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())"
-        let envelope = ProtocolEnvelope(
-            protocolVersion: 1,
-            messageID: messageID,
-            correlationID: nil,
-            deviceID: server.deviceID,
-            type: type,
-            sentAt: Date(),
-            payload: payload
-        )
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let data = try? encoder.encode(envelope), let text = String(data: data, encoding: .utf8) else { return false }
-        return await withCheckedContinuation { continuation in
-            eventAcknowledgements[messageID] = continuation
-            Task { [weak self] in
-                do { try await socket.send(.string(text)) }
-                catch { self?.finishAcknowledgement(messageID, result: false) }
-            }
-            Task { [weak self] in
-                try? await Task.sleep(for: .seconds(5))
-                self?.finishAcknowledgement(messageID, result: false)
-            }
-        }
-    }
-
     func disconnect(markUnpaired: Bool) {
         receiveTask?.cancel()
         heartbeatTask?.cancel()
@@ -198,17 +167,15 @@ final class ServerConnection {
                 }
                 let envelope = try decoder.decode(ProtocolEnvelope.self, from: data)
                 guard socket === task else { return }
-                guard envelope.protocolVersion == 1 else { continue }
-                if envelope.type == "event.ack", let correlationID = envelope.correlationID {
-                    finishAcknowledgement(correlationID, result: true)
-                } else if envelope.type == "session.ready" {
+                guard let deviceID = server?.deviceID,
+                      envelope.protocolVersion == 1,
+                      envelope.deviceID == deviceID else { continue }
+                if envelope.type == "session.ready" {
                     Self.logger.info("WebSocket session is ready")
 #if DEBUG
                     print("[ServerConnection] session.ready")
 #endif
                     status = .connected
-                    lastConnectedAt = Date()
-                    Task { await onConnected?() }
                 } else {
                     await onEnvelope?(envelope)
                 }
@@ -257,9 +224,6 @@ final class ServerConnection {
         }
     }
 
-    private func finishAcknowledgement(_ messageID: String, result: Bool) {
-        eventAcknowledgements.removeValue(forKey: messageID)?.resume(returning: result)
-    }
 }
 
 private struct PairingResponse: Decodable {

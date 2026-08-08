@@ -8,25 +8,12 @@
 import Foundation
 
 struct DeviceJournalState: Codable {
-    var pendingPlans: [PendingWritePlan]?
-    // 0.1.0 legacy fields. Keep decoding them so an installed app can migrate
-    // its existing single pending approval into the durable queue.
-    var pendingPlan: WritePlan?
-    var remotePlanContext: RemotePlanContext?
-    var pendingUndo: UndoPlan?
-    var lastResult: OperationResult?
-    var lastBatchID: String?
-    var lastUndoResult: UndoResult?
-    var activeOperation: RemotePlanContext?
-    var pendingOperationReport: OperationCompletionReport?
-    var pendingUndoReport: UndoCompletionReport?
-    var historyRecords: [HistoryRecord]?
+    var pendingPlans: [WritePlan]
+    var pendingHistoryAction: PendingHistoryAction?
+    var historyRecords: [HistoryRecord]
 
     static let empty = DeviceJournalState(
-        pendingPlans: [],
-        pendingPlan: nil, remotePlanContext: nil, pendingUndo: nil,
-        lastResult: nil, lastBatchID: nil, lastUndoResult: nil, activeOperation: nil,
-        pendingOperationReport: nil, pendingUndoReport: nil, historyRecords: []
+        pendingPlans: [], pendingHistoryAction: nil, historyRecords: []
     )
 }
 

@@ -131,9 +131,9 @@ struct PairedServer: Codable, Equatable, Sendable {
     let baseURL: URL
     let deviceID: String
     let displayName: String
-    let capabilities: [String]?
+    let capabilities: [String]
 
-    func grants(_ capability: String) -> Bool { capabilities?.contains(capability) == true }
+    func grants(_ capability: String) -> Bool { capabilities.contains(capability) }
 }
 
 enum ConnectionStatus: Equatable {

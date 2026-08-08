@@ -33,12 +33,8 @@ struct LibraryView: View {
                             AssetCell(
                                 asset: asset,
                                 client: model.photoLibrary,
-                                selected: model.selectedAssetIDs.contains(asset.id),
                                 allowsNetwork: model.allowsICloudDownload
-                            ) {
-                                if model.selectedAssetIDs.contains(asset.id) { model.selectedAssetIDs.remove(asset.id) }
-                                else { model.selectedAssetIDs.insert(asset.id) }
-                            }
+                            )
                         }
                     }
                     if model.nextCursor != nil {
@@ -63,42 +59,29 @@ struct LibraryView: View {
 private struct AssetCell: View {
     let asset: AssetDescriptor
     let client: any PhotoLibraryClient
-    let selected: Bool
     let allowsNetwork: Bool
-    let action: () -> Void
     @State private var image: UIImage?
 
     var body: some View {
-        Button(action: action) {
-            ZStack(alignment: .topTrailing) {
-                Group {
-                    if let image { Image(uiImage: image).resizable().scaledToFill() }
-                    else { Rectangle().fill(.quaternary).overlay { ProgressView() } }
-                }
-                .frame(minHeight: 104)
-                .aspectRatio(1, contentMode: .fill)
-                .clipped()
+        ZStack(alignment: .bottomLeading) {
+            Group {
+                if let image { Image(uiImage: image).resizable().scaledToFill() }
+                else { Rectangle().fill(.quaternary).overlay { ProgressView() } }
+            }
+            .frame(minHeight: 104)
+            .aspectRatio(1, contentMode: .fill)
+            .clipped()
 
-                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundStyle(selected ? Color.accentColor : .white)
-                    .shadow(radius: 2)
+            if asset.kind == .video {
+                Image(systemName: "video.fill")
+                    .foregroundStyle(.white).shadow(radius: 2)
                     .padding(6)
-
-                if asset.kind == .video {
-                    Image(systemName: "video.fill")
-                        .foregroundStyle(.white).shadow(radius: 2)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                        .padding(6)
-                }
             }
         }
-        .buttonStyle(.plain)
         .task(id: asset.id) {
             image = try? await client.thumbnail(for: asset.id, targetSize: CGSize(width: 240, height: 240), allowsNetwork: allowsNetwork)
         }
         .accessibilityLabel(asset.kind == .video ? String(localized: "视频") : String(localized: "照片"))
-        .accessibilityValue(selected ? String(localized: "已选择") : String(localized: "未选择"))
         .accessibilityIdentifier("asset-\(asset.id)")
     }
 }

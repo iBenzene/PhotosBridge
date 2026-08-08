@@ -60,24 +60,18 @@ paths:
             responses:
                 "201": { description: Plan created }
                 "409": { description: Idempotency conflict }
-    /plans/{plan_id}/request-approval:
+    /plans/{plan_id}/deliver:
         post:
             summary: Deliver a plan for on-device approval
             parameters:
                 - { name: plan_id, in: path, required: true, schema: { type: string } }
             responses:
-                "202": { description: Awaiting device approval }
-    /operations/{operation_id}:
+                "202": { description: Delivery queued }
+    /plans/{plan_id}/delivery:
         get:
-            summary: Read the durable operation result
+            summary: Read the latest delivery receipt
             parameters:
-                - { name: operation_id, in: path, required: true, schema: { type: string } }
+                - { name: plan_id, in: path, required: true, schema: { type: string } }
             responses:
-                "200": { description: Operation }
-    /batches/{batch_id}/undo-plans:
-        post:
-            summary: Request on-device approval to undo one batch
-            parameters:
-                - { name: batch_id, in: path, required: true, schema: { type: string } }
-            responses:
-                "202": { description: Undo awaiting approval }
+                "200": { description: Delivery state }
+                "404": { description: Delivery not found }

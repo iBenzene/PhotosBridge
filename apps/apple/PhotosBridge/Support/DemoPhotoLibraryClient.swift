@@ -46,14 +46,20 @@ final class DemoPhotoLibraryClient: PhotoLibraryClient {
         [AlbumDescriptor(id: "demo-album", title: "Photos Bridge Test", assetCount: 0, isWritable: true)]
     }
     func assetIDs(inAlbum albumID: String) async throws -> [String] { [] }
-    func add(assetIDs: [String], toAlbumNamed albumName: String) async throws -> OperationResult {
+    func add(assetIDs: [String], toAlbumNamed albumName: String, createIfMissing: Bool) async throws -> OperationResult {
         OperationResult(
             id: UUID(), albumID: "demo-album", albumName: albumName,
-            counts: .init(requested: assetIDs.count, added: assetIDs.count, skippedExisting: 0, missing: 0, failed: 0),
-            addedAssetIDs: assetIDs, failedAssetIDs: []
+            addedAssetIDs: assetIDs,
+            alreadyPresentAssetIDs: [], missingAssetIDs: [], failedAssetIDs: []
+        )
+    }
+    func restore(assetIDs: [String], toAlbumID albumID: String) async throws -> RestoreResult {
+        RestoreResult(
+            addedAssetIDs: assetIDs, alreadyPresentAssetIDs: [],
+            missingAssetIDs: [], failedAssetIDs: []
         )
     }
     func remove(assetIDs: [String], fromAlbumID albumID: String) async throws -> UndoResult {
-        UndoResult(requested: assetIDs.count, removed: assetIDs.count, missing: 0, failed: 0, removedAssetIDs: assetIDs)
+        UndoResult(removedAssetIDs: assetIDs, missingAssetIDs: [], failedAssetIDs: [])
     }
 }

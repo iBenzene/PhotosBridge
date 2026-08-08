@@ -19,24 +19,16 @@ final class AppModel {
     var authorization: PhotoAccessLevel = .notDetermined
     var assets: [AssetDescriptor] = []
     var albums: [AlbumDescriptor] = []
-    var selectedAssetIDs = Set<String>()
     var snapshotID: String?
     var nextCursor: String?
     var isLoading = false
     var errorMessage: String?
-    var lastResult: OperationResult?
-    var pendingPlans: [PendingWritePlan] = []
-    var pendingUndo: UndoPlan?
-    var lastBatchID: String?
-    var lastUndoResult: UndoResult?
-    var activeOperation: RemotePlanContext?
-    var pendingOperationReport: OperationCompletionReport?
-    var pendingUndoReport: UndoCompletionReport?
+    var pendingPlans: [WritePlan] = []
+    var pendingHistoryAction: PendingHistoryAction?
     var historyRecords: [HistoryRecord] = []
     var selectedSection: AppSection = .plans
     var allowsICloudDownload = false
     var allowsThumbnailTransfer = true
-    private var isRecoveringJournal = false
 
     init(photoLibrary: (any PhotoLibraryClient)? = nil, journal: DeviceJournal? = nil) {
         let resolvedPhotoLibrary = photoLibrary ?? PhotoKitLibraryClient()
@@ -45,51 +37,24 @@ final class AppModel {
         self.journal = resolvedJournal
         authorization = resolvedPhotoLibrary.authorizationLevel()
         let restored = resolvedJournal.load()
-        pendingPlans = restored.pendingPlans ?? []
-        var migratedLegacyPlan = false
-        if let legacyPlan = restored.pendingPlan {
-            let legacyItem = PendingWritePlan(plan: legacyPlan, remoteContext: restored.remotePlanContext)
-            let alreadyQueued = pendingPlans.contains {
-                $0.id == legacyItem.id ||
-                ($0.remoteContext?.planID != nil && $0.remoteContext?.planID == legacyItem.remoteContext?.planID)
-            }
-            if !alreadyQueued { pendingPlans.insert(legacyItem, at: 0) }
-            migratedLegacyPlan = true
-        }
-        pendingUndo = restored.pendingUndo
-        lastResult = restored.lastResult
-        lastBatchID = restored.lastBatchID
-        lastUndoResult = restored.lastUndoResult
-        activeOperation = restored.activeOperation
-        pendingOperationReport = restored.pendingOperationReport
-        pendingUndoReport = restored.pendingUndoReport
-        historyRecords = restored.historyRecords ?? restored.lastResult.map {
-            [HistoryRecord(result: $0, batchID: restored.lastBatchID ?? "batch_legacy", undoResult: restored.lastUndoResult)]
-        } ?? []
+        pendingPlans = restored.pendingPlans
+        pendingHistoryAction = restored.pendingHistoryAction
+        historyRecords = restored.historyRecords
         serverConnection.onEnvelope = { [weak self] envelope in
             await self?.handle(envelope)
         }
-        serverConnection.onConnected = { [weak self] in
-            await self?.recoverJournalAfterConnection()
-        }
         if ProcessInfo.processInfo.arguments.contains("--ui-testing"), pendingPlans.isEmpty {
             let demoPlan = WritePlan(
+                id: "demo-plan-id",
+                contentHash: String(repeating: "0", count: 64),
+                serverURL: "http://192.168.0.12:8787",
                 summary: String(localized: "UI测试演示计划"),
                 targetAlbumName: "Photos Bridge Test",
+                createAlbumIfMissing: true,
                 assetIDs: ["demo-1"]
             )
-            let demoItem = PendingWritePlan(
-                plan: demoPlan,
-                remoteContext: RemotePlanContext(
-                    planID: "demo-plan-id",
-                    operationID: "demo-op-id",
-                    contentHash: demoPlan.contentHash,
-                    serverURL: "http://192.168.0.12:8787"
-                )
-            )
-            pendingPlans = [demoItem]
+            pendingPlans = [demoPlan]
         }
-        if restored.pendingPlans == nil || migratedLegacyPlan { persistJournal() }
     }
 
     func start() async {
@@ -97,31 +62,6 @@ final class AppModel {
         if authorization.canRead { await reloadLibrary() }
         if let (server, secret) = credentialsStore.load() {
             serverConnection.connect(server: server, secret: secret)
-        }
-    }
-
-    private func recoverJournalAfterConnection() async {
-        guard !isRecoveringJournal else { return }
-        isRecoveringJournal = true
-        defer { isRecoveringJournal = false }
-        if let pendingOperationReport {
-            if await sendOperationReport(pendingOperationReport) {
-                self.pendingOperationReport = nil
-                self.activeOperation = nil
-                persistJournal()
-            }
-        } else if let activeOperation {
-            let acknowledged = await serverConnection.sendEvent(type: "operation.unknown", payload: .object([
-                "plan_id": .string(activeOperation.planID),
-                "operation_id": .string(activeOperation.operationID),
-                "reason": .string("app_terminated_during_photokit_commit")
-            ]))
-            if acknowledged { self.activeOperation = nil; persistJournal() }
-        }
-        if let pendingUndoReport, await sendUndoReport(pendingUndoReport) {
-            self.pendingUndoReport = nil
-            self.pendingUndo = nil
-            persistJournal()
         }
     }
 
@@ -154,7 +94,7 @@ final class AppModel {
         guard updated != authorization else { return }
         authorization = updated
         if updated.canRead { await reloadLibrary() }
-        else { assets = []; albums = []; selectedAssetIDs = [] }
+        else { assets = []; albums = [] }
     }
 
     func manageLimitedPhotoAccess() {
@@ -165,7 +105,6 @@ final class AppModel {
         snapshotID = nil
         nextCursor = nil
         assets = []
-        selectedAssetIDs = []
         await loadNextPage()
         await loadAlbums()
     }
@@ -197,57 +136,24 @@ final class AppModel {
         catch { errorMessage = error.localizedDescription }
     }
 
-    func rejectPlan(id: UUID) async {
-        guard let item = pendingPlans.first(where: { $0.id == id }) else { return }
-        if let context = item.remoteContext {
-            let acknowledged = await serverConnection.sendEvent(type: "plan.rejected", payload: .object([
-                "plan_id": .string(context.planID), "operation_id": .string(context.operationID)
-            ]))
-            guard acknowledged else {
-                errorMessage = String(localized: "服务器尚未确认拒绝结果，请保持连接后重试。")
-                return
-            }
-        }
+    func rejectPlan(id: String) {
+        guard pendingPlans.contains(where: { $0.id == id }) else { return }
         pendingPlans.removeAll { $0.id == id }
         persistJournal()
     }
 
-    func executePlan(id: UUID) async {
-        guard let item = pendingPlans.first(where: { $0.id == id }) else { return }
-        let plan = item.plan
-        guard !plan.isExpired else {
-            errorMessage = String(localized: "计划已经过期，请重新创建。")
-            return
-        }
-        let context = item.remoteContext
+    func executePlan(id: String) async {
+        guard let plan = pendingPlans.first(where: { $0.id == id }) else { return }
         isLoading = true
         defer { isLoading = false }
         do {
-            if let context {
-                let acknowledged = await serverConnection.sendEvent(type: "operation.executing", payload: .object([
-                    "plan_id": .string(context.planID), "operation_id": .string(context.operationID)
-                ]))
-                guard acknowledged else {
-                    errorMessage = String(localized: "服务器尚未确认执行状态，照片库未被修改。")
-                    return
-                }
-                activeOperation = context
-                persistJournal()
-            }
-            lastResult = try await photoLibrary.add(assetIDs: plan.assetIDs, toAlbumNamed: plan.targetAlbumName)
-            if let result = lastResult {
-                let batchID = "batch_\(result.id.uuidString.replacingOccurrences(of: "-", with: "").lowercased())"
-                lastBatchID = batchID
-                historyRecords.insert(HistoryRecord(result: result, batchID: batchID, undoResult: nil), at: 0)
-                if historyRecords.count > 100 { historyRecords.removeLast(historyRecords.count - 100) }
-                if let context {
-                    let report = OperationCompletionReport(context: context, result: result, batchID: batchID)
-                    pendingOperationReport = report
-                    persistJournal()
-                    if await sendOperationReport(report) { activeOperation = nil; pendingOperationReport = nil }
-                }
-            }
-            selectedAssetIDs = []
+            let result = try await photoLibrary.add(
+                assetIDs: plan.assetIDs,
+                toAlbumNamed: plan.targetAlbumName,
+                createIfMissing: plan.createAlbumIfMissing
+            )
+            historyRecords.insert(HistoryRecord(result: result, undoResult: nil), at: 0)
+            if historyRecords.count > 100 { historyRecords.removeLast(historyRecords.count - 100) }
             pendingPlans.removeAll { $0.id == id }
             persistJournal()
             await loadAlbums()
@@ -256,48 +162,79 @@ final class AppModel {
         }
     }
 
-    func makeUndoPlan(for recordID: UUID) {
+    func beginUndo(for recordID: UUID) {
         guard let record = historyRecords.first(where: { $0.id == recordID }),
-              let albumID = record.result.albumID, record.isUndoable else { return }
-        pendingUndo = UndoPlan(
-            id: UUID(), remoteID: nil,
-            batchID: record.batchID,
-            albumID: albumID, albumName: record.result.albumName, assetIDs: record.result.addedAssetIDs
-        )
+              record.isUndoable else { return }
+        pendingHistoryAction = .undo(recordID)
         persistJournal()
     }
 
-    func rejectPendingUndo() async {
-        if let remoteID = pendingUndo?.remoteID {
-            let acknowledged = await serverConnection.sendEvent(
-                type: "undo.rejected", payload: .object(["undo_plan_id": .string(remoteID)])
-            )
-            guard acknowledged else {
-                errorMessage = String(localized: "服务器尚未确认拒绝结果，请保持连接后重试。")
-                return
-            }
+    func restoreHistoryRecord(id: UUID) {
+        guard pendingHistoryAction == nil,
+              let record = historyRecords.first(where: { $0.id == id }),
+              record.isRestorable else { return }
+        pendingHistoryAction = .restore(record.id)
+        persistJournal()
+    }
+
+    func rejectPendingRestore() {
+        guard case .restore = pendingHistoryAction else { return }
+        pendingHistoryAction = nil
+        persistJournal()
+    }
+
+    func executePendingRestore() async {
+        guard case .restore(let recordID) = pendingHistoryAction,
+              let index = historyRecords.firstIndex(where: { $0.id == recordID }) else { return }
+        let albumID = historyRecords[index].result.albumID
+        let assetIDs = historyRecords[index].restorableAssetIDs
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let attempt = try await photoLibrary.restore(assetIDs: assetIDs, toAlbumID: albumID)
+            let merged = historyRecords[index].restoreResult?.merging(attempt) ?? attempt
+            historyRecords[index].restoreResult = merged
+            pendingHistoryAction = nil
+            persistJournal()
+            await loadAlbums()
+        } catch {
+            errorMessage = error.localizedDescription
         }
-        pendingUndo = nil
+    }
+
+    func deleteHistoryRecord(id: UUID) {
+        historyRecords.removeAll { $0.id == id }
+        if pendingHistoryAction?.recordID == id { pendingHistoryAction = nil }
+        persistJournal()
+    }
+
+    func deleteHistoryRecords(at offsets: IndexSet) {
+        let removedIDs = Set(offsets.map { historyRecords[$0].id })
+        historyRecords.remove(atOffsets: offsets)
+        if let recordID = pendingHistoryAction?.recordID, removedIDs.contains(recordID) {
+            pendingHistoryAction = nil
+        }
+        persistJournal()
+    }
+
+    func rejectPendingUndo() {
+        guard case .undo = pendingHistoryAction else { return }
+        pendingHistoryAction = nil
         persistJournal()
     }
 
     func executePendingUndo() async {
-        guard let undo = pendingUndo else { return }
+        guard case .undo(let recordID) = pendingHistoryAction,
+              let index = historyRecords.firstIndex(where: { $0.id == recordID }) else { return }
+        let albumID = historyRecords[index].result.albumID
+        let assetIDs = historyRecords[index].result.addedAssetIDs
         isLoading = true
         defer { isLoading = false }
         do {
-            let result = try await photoLibrary.remove(assetIDs: undo.assetIDs, fromAlbumID: undo.albumID)
-            lastUndoResult = result
-            if let index = historyRecords.firstIndex(where: { $0.batchID == undo.batchID }) {
-                historyRecords[index].undoResult = result
-            }
-            if let remoteID = undo.remoteID {
-                let report = UndoCompletionReport(undoPlanID: remoteID, batchID: undo.batchID, result: result)
-                pendingUndoReport = report
-                persistJournal()
-                if await sendUndoReport(report) { pendingUndoReport = nil }
-            }
-            pendingUndo = nil
+            let result = try await photoLibrary.remove(assetIDs: assetIDs, fromAlbumID: albumID)
+            historyRecords[index].undoResult = result
+            historyRecords[index].restoreResult = nil
+            pendingHistoryAction = nil
             persistJournal()
             await loadAlbums()
         } catch { errorMessage = error.localizedDescription }
@@ -353,80 +290,55 @@ final class AppModel {
                     "width": .number(Double(image.size.width)),
                     "height": .number(Double(image.size.height))
                 ])
-            case "plans.approval.request":
+            case "plans.delivery.request":
                 try requireCapability("albums.membership.write")
                 guard let planID = envelope.payload["plan_id"]?.stringValue,
-                      let operationID = envelope.payload["operation_id"]?.stringValue,
                       let expectedHash = envelope.payload["content_hash"]?.stringValue,
                       let summary = envelope.payload["summary"]?.stringValue,
-                      let deviceID = envelope.payload["device_id"]?.stringValue,
                       let targetAlbum = envelope.payload["target_album"],
                       let albumName = targetAlbum["name"]?.stringValue,
+                      let createIfMissing = targetAlbum["create_if_missing"]?.boolValue,
                       let assetValues = envelope.payload["asset_ids"]?.arrayValue else {
                     throw PhotoLibraryFailure.photoKit(String(localized: "远程计划内容不完整。"))
                 }
                 let assetIDs = assetValues.compactMap(\.stringValue)
-                if targetAlbum["create_if_missing"]?.boolValue == true {
+                guard assetIDs.count == assetValues.count else {
+                    throw PhotoLibraryFailure.photoKit(String(localized: "远程计划包含无效的资源 ID。"))
+                }
+                if createIfMissing {
                     try requireCapability("albums.create")
                 }
                 let hashContent: JSONValue = .object([
                     "asset_ids": .array(assetIDs.map(JSONValue.string)),
-                    "device_id": .string(deviceID),
+                    "device_id": .string(envelope.deviceID),
                     "summary": .string(summary),
                     "target_album": .object([
-                        "create_if_missing": .bool(targetAlbum["create_if_missing"]?.boolValue ?? false),
+                        "create_if_missing": .bool(createIfMissing),
                         "name": .string(albumName)
                     ])
                 ])
                 guard try hashContent.canonicalSHA256() == expectedHash else {
                     throw PhotoLibraryFailure.photoKit(String(localized: "远程计划哈希不匹配。"))
                 }
-                let existingIndex = pendingPlans.firstIndex { $0.remoteContext?.planID == planID }
+                let existingIndex = pendingPlans.firstIndex { $0.id == planID }
                 let plan = WritePlan(
-                    id: existingIndex.map { pendingPlans[$0].id } ?? UUID(),
+                    id: planID,
+                    contentHash: expectedHash,
+                    serverURL: serverConnection.server?.baseURL.absoluteString,
                     createdAt: envelope.payload["created_at"]?.stringValue.flatMap(ProtocolEnvelope.parseDate) ?? Date(),
-                    expiresAt: envelope.payload["expires_at"]?.stringValue.flatMap(ProtocolEnvelope.parseDate),
                     summary: summary,
                     targetAlbumName: albumName,
+                    createAlbumIfMissing: createIfMissing,
                     assetIDs: assetIDs
                 )
-                let item = PendingWritePlan(
-                    plan: plan,
-                    remoteContext: RemotePlanContext(
-                        planID: planID, operationID: operationID, contentHash: expectedHash,
-                        serverURL: serverConnection.server?.baseURL.absoluteString
-                    )
-                )
-                if let existingIndex { pendingPlans[existingIndex] = item }
+                if let existingIndex { pendingPlans[existingIndex] = plan }
                 else {
-                    pendingPlans.insert(item, at: 0)
+                    pendingPlans.insert(plan, at: 0)
                     if pendingPlans.count > 100 { pendingPlans.removeLast(pendingPlans.count - 100) }
                 }
                 selectedSection = .plans
                 persistJournal()
-                payload = .object(["accepted": .bool(true), "plan_id": .string(planID)])
-            case "undo.approval.request":
-                guard let undoID = envelope.payload["undo_plan_id"]?.stringValue,
-                      let batchID = envelope.payload["batch_id"]?.stringValue,
-                      let albumID = envelope.payload["target_album_id"]?.stringValue,
-                      let expectedHash = envelope.payload["content_hash"]?.stringValue,
-                      let values = envelope.payload["asset_ids"]?.arrayValue else {
-                    throw PhotoLibraryFailure.photoKit(String(localized: "撤销计划内容不完整。"))
-                }
-                let undoHashContent: JSONValue = .object([
-                    "asset_ids": .array(values),
-                    "batch_id": .string(batchID),
-                    "target_album_id": .string(albumID)
-                ])
-                guard try undoHashContent.canonicalSHA256() == expectedHash else {
-                    throw PhotoLibraryFailure.photoKit(String(localized: "撤销计划哈希不匹配。"))
-                }
-                pendingUndo = UndoPlan(
-                    id: UUID(), remoteID: undoID, batchID: batchID, albumID: albumID,
-                    albumName: String(localized: "目标相册"), assetIDs: values.compactMap(\.stringValue)
-                )
-                persistJournal()
-                payload = .object(["accepted": .bool(true), "undo_plan_id": .string(undoID)])
+                payload = .object(["stored": .bool(true), "plan_id": .string(planID)])
             default:
                 await serverConnection.sendResponse(
                     to: envelope,
@@ -445,7 +357,7 @@ final class AppModel {
                 to: envelope,
                 type: envelope.type.replacingOccurrences(of: ".request", with: ".error"),
                 payload: .object([
-                    "code": .string("PHOTOKIT_READ_FAILED"),
+                    "code": .string("REQUEST_FAILED"),
                     "message": .string(error.localizedDescription)
                 ])
             )
@@ -455,15 +367,7 @@ final class AppModel {
     private func persistJournal() {
         journal.save(DeviceJournalState(
             pendingPlans: pendingPlans,
-            pendingPlan: nil,
-            remotePlanContext: nil,
-            pendingUndo: pendingUndo,
-            lastResult: lastResult,
-            lastBatchID: lastBatchID,
-            lastUndoResult: lastUndoResult,
-            activeOperation: activeOperation,
-            pendingOperationReport: pendingOperationReport,
-            pendingUndoReport: pendingUndoReport,
+            pendingHistoryAction: pendingHistoryAction,
             historyRecords: historyRecords
         ))
     }
@@ -476,51 +380,6 @@ final class AppModel {
         }
     }
 
-    private func sendOperationReport(_ report: OperationCompletionReport) async -> Bool {
-        await serverConnection.sendEvent(type: "operation.completed", payload: .object([
-            "plan_id": .string(report.context.planID),
-            "operation_id": .string(report.context.operationID),
-            "batch_id": .string(report.batchID),
-            "album_id": .string(report.result.albumID ?? ""),
-            "counts": (try? .encode(report.result.counts)) ?? .object([:]),
-            "added_asset_ids": (try? .encode(report.result.addedAssetIDs)) ?? .array([]),
-            "failures": (try? .encode(report.result.failedAssetIDs)) ?? .array([])
-        ]))
-    }
-
-    private func sendUndoReport(_ report: UndoCompletionReport) async -> Bool {
-        await serverConnection.sendEvent(type: "undo.completed", payload: .object([
-            "undo_plan_id": .string(report.undoPlanID), "batch_id": .string(report.batchID),
-            "removed_asset_ids": (try? .encode(report.result.removedAssetIDs)) ?? .array([]),
-            "counts": (try? .encode(report.result)) ?? .object([:])
-        ]))
-    }
-}
-
-struct RemotePlanContext: Equatable, Codable, Sendable {
-    let planID: String
-    let operationID: String
-    let contentHash: String
-    let serverURL: String?
-
-    init(planID: String, operationID: String, contentHash: String, serverURL: String? = nil) {
-        self.planID = planID
-        self.operationID = operationID
-        self.contentHash = contentHash
-        self.serverURL = serverURL
-    }
-}
-
-struct OperationCompletionReport: Equatable, Codable, Sendable {
-    let context: RemotePlanContext
-    let result: OperationResult
-    let batchID: String
-}
-
-struct UndoCompletionReport: Equatable, Codable, Sendable {
-    let undoPlanID: String
-    let batchID: String
-    let result: UndoResult
 }
 
 enum AppSection: String, CaseIterable, Identifiable {

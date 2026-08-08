@@ -24,22 +24,20 @@ type PendingRequest = {
     timer: NodeJS.Timeout;
 };
 
+export type PlanDelivery = {
+    delivery_id: string;
+    plan_id: string;
+    status: string;
+    created_at: string;
+    delivery_expires_at: string;
+};
+
 export class DeviceHub {
     private readonly sockets = new Map<string, WebSocket>();
     private readonly pending = new Map<string, PendingRequest>();
     private readonly websocketServer = new WebSocketServer({ noServer: true });
-    private eventHandler: ((type: string, payload: unknown, deviceID: string) => void) | undefined;
-    private responseHandler:
-        ((requestType: string, responseType: string, payload: unknown, deviceID: string) => void) | undefined;
 
     constructor(private readonly database: PhotosBridgeDatabase) {}
-
-    onEvent(handler: (type: string, payload: unknown, deviceID: string) => void): void {
-        this.eventHandler = handler;
-    }
-    onResponse(handler: (requestType: string, responseType: string, payload: unknown, deviceID: string) => void): void {
-        this.responseHandler = handler;
-    }
 
     attach(server: Server): void {
         server.on("upgrade", (request, socket, head) => {
@@ -87,29 +85,40 @@ export class DeviceHub {
         return result;
     }
 
-    enqueue(deviceID: string, type: string, payload: unknown, expiresAt: string): string {
-        const payloadJSON = JSON.stringify(payload);
+    enqueuePlanDelivery(planID: string, deliveryExpiresAt: string): PlanDelivery {
+        const plan = this.database.connection.prepare("SELECT device_id FROM plans WHERE id = ?").get(planID) as
+            { device_id: string } | undefined;
+        if (!plan) throw new Error("PLAN_NOT_FOUND");
         const existing = this.database.connection
             .prepare(
                 `
-      SELECT id FROM commands
-      WHERE device_id = ? AND type = ? AND payload_json = ? AND status IN ('queued', 'sent')
+      SELECT id FROM plan_deliveries
+      WHERE plan_id = ? AND status IN ('queued', 'sent', 'stored')
       ORDER BY created_at DESC LIMIT 1
     `
             )
-            .get(deviceID, type, payloadJSON) as { id: string } | undefined;
-        if (existing) return existing.id;
-        const messageID = id("msg");
+            .get(planID) as { id: string } | undefined;
+        if (existing) return this.getLatestPlanDelivery(planID)!;
+        const deliveryID = id("delivery");
         const timestamp = new Date().toISOString();
         this.database.connection
             .prepare(
-                `INSERT INTO commands
-      (id, device_id, type, payload_json, status, created_at, updated_at, expires_at)
-      VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)`
+                `INSERT INTO plan_deliveries
+      (id, plan_id, status, created_at, delivery_expires_at)
+      VALUES (?, ?, 'queued', ?, ?)`
             )
-            .run(messageID, deviceID, type, payloadJSON, timestamp, timestamp, expiresAt);
-        this.deliverQueued(deviceID);
-        return messageID;
+            .run(deliveryID, planID, timestamp, deliveryExpiresAt);
+        this.deliverQueued(plan.device_id);
+        return this.getLatestPlanDelivery(planID)!;
+    }
+
+    getLatestPlanDelivery(planID: string): PlanDelivery | undefined {
+        return this.database.connection
+            .prepare(
+                `SELECT id AS delivery_id, plan_id, status, created_at, delivery_expires_at
+                 FROM plan_deliveries WHERE plan_id = ? ORDER BY created_at DESC LIMIT 1`
+            )
+            .get(planID) as PlanDelivery | undefined;
     }
 
     private accept(deviceID: string, socket: WebSocket): void {
@@ -144,33 +153,29 @@ export class DeviceHub {
         }
         if (envelope.protocol_version !== 1 || envelope.device_id !== deviceID) return;
         this.database.touchDevice(deviceID);
-        if (!envelope.correlation_id) {
-            this.eventHandler?.(envelope.type, envelope.payload, deviceID);
-            const socket = this.sockets.get(deviceID);
-            if (socket?.readyState === WebSocket.OPEN) {
-                socket.send(
-                    JSON.stringify({
-                        correlation_id: envelope.message_id,
-                        device_id: deviceID,
-                        message_id: id("msg"),
-                        payload: { accepted: true },
-                        protocol_version: 1,
-                        sent_at: new Date().toISOString(),
-                        type: "event.ack",
-                    } satisfies ProtocolEnvelope)
-                );
+        if (!envelope.correlation_id) return;
+        const delivery = this.database.connection
+            .prepare(
+                `SELECT pd.id, pd.plan_id FROM plan_deliveries pd
+                 JOIN plans p ON p.id = pd.plan_id
+                 WHERE pd.id = ? AND p.device_id = ?`
+            )
+            .get(envelope.correlation_id, deviceID) as { id: string; plan_id: string } | undefined;
+        if (delivery) {
+            const payload = envelope.payload as { plan_id?: unknown; stored?: unknown } | null;
+            const stored =
+                envelope.type === "plans.delivery.response" &&
+                payload?.stored === true &&
+                payload.plan_id === delivery.plan_id;
+            if (stored) {
+                this.database.connection
+                    .prepare("UPDATE plan_deliveries SET status = 'stored' WHERE id = ?")
+                    .run(delivery.id);
+            } else if (envelope.type === "plans.delivery.error") {
+                this.database.connection
+                    .prepare("UPDATE plan_deliveries SET status = 'failed' WHERE id = ?")
+                    .run(delivery.id);
             }
-            return;
-        }
-        const command = this.database.connection
-            .prepare("SELECT type FROM commands WHERE id = ? AND device_id = ?")
-            .get(envelope.correlation_id, deviceID) as { type: string } | undefined;
-        if (command) {
-            const status = envelope.type.endsWith(".error") ? "failed" : "completed";
-            this.database.connection
-                .prepare("UPDATE commands SET status = ?, result_json = ?, updated_at = ? WHERE id = ?")
-                .run(status, JSON.stringify(envelope.payload), new Date().toISOString(), envelope.correlation_id);
-            this.responseHandler?.(command.type, envelope.type, envelope.payload, deviceID);
         }
         const pending = this.pending.get(envelope.correlation_id);
         if (!pending) return;
@@ -183,35 +188,48 @@ export class DeviceHub {
     private deliverQueued(deviceID: string): void {
         const socket = this.sockets.get(deviceID);
         if (!socket || socket.readyState !== WebSocket.OPEN) return;
-        const commands = this.database.connection
+        const deliveries = this.database.connection
             .prepare(
                 `
-      SELECT id, type, payload_json FROM commands
-      WHERE device_id = ? AND status IN ('queued', 'sent') AND expires_at > ?
-      ORDER BY created_at ASC
+      SELECT pd.id, p.id AS plan_id, p.summary,
+             p.target_album_json, p.asset_ids_json, p.content_hash, p.created_at
+      FROM plan_deliveries pd JOIN plans p ON p.id = pd.plan_id
+      WHERE p.device_id = ? AND pd.status IN ('queued', 'sent') AND pd.delivery_expires_at > ?
+      ORDER BY pd.created_at ASC
     `
             )
-            .all(deviceID, new Date().toISOString()) as Array<{ id: string; type: string; payload_json: string }>;
-        for (const command of commands) {
+            .all(deviceID, new Date().toISOString()) as Array<Record<string, unknown>>;
+        for (const delivery of deliveries) {
             const envelope: ProtocolEnvelope = {
                 correlation_id: null,
                 device_id: deviceID,
-                message_id: command.id,
-                payload: JSON.parse(command.payload_json),
+                message_id: String(delivery.id),
+                payload: {
+                    asset_ids: JSON.parse(String(delivery.asset_ids_json)),
+                    content_hash: String(delivery.content_hash),
+                    created_at: String(delivery.created_at),
+                    plan_id: String(delivery.plan_id),
+                    summary: String(delivery.summary),
+                    target_album: JSON.parse(String(delivery.target_album_json)),
+                },
                 protocol_version: 1,
                 sent_at: new Date().toISOString(),
-                type: command.type,
+                type: "plans.delivery.request",
             };
             socket.send(JSON.stringify(envelope));
             this.database.connection
-                .prepare("UPDATE commands SET status = 'sent', updated_at = ? WHERE id = ?")
-                .run(new Date().toISOString(), command.id);
+                .prepare("UPDATE plan_deliveries SET status = 'sent' WHERE id = ?")
+                .run(delivery.id);
         }
         this.database.connection
             .prepare(
-                "UPDATE commands SET status = 'expired', updated_at = ? WHERE device_id = ? AND status IN ('queued', 'sent') AND expires_at <= ?"
+                `UPDATE plan_deliveries SET status = 'expired'
+                 WHERE id IN (
+                   SELECT pd.id FROM plan_deliveries pd JOIN plans p ON p.id = pd.plan_id
+                   WHERE p.device_id = ? AND pd.status IN ('queued', 'sent') AND pd.delivery_expires_at <= ?
+                 )`
             )
-            .run(new Date().toISOString(), deviceID, new Date().toISOString());
+            .run(deviceID, new Date().toISOString());
     }
 }
 
@@ -219,7 +237,7 @@ export class DeviceOfflineError extends Error {
     readonly code = "DEVICE_OFFLINE";
 }
 export class DeviceTimeoutError extends Error {
-    readonly code = "OPERATION_STATE_UNKNOWN";
+    readonly code = "DEVICE_TIMEOUT";
 }
 export class DeviceResponseError extends Error {
     readonly code = "DEVICE_RESPONSE_ERROR";

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { WebSocket } from "ws";
 import { PhotosBridgeDatabase } from "../src/database.js";
 import { DeviceHub, type ProtocolEnvelope } from "../src/device-hub.js";
+import { PlanService } from "../src/plans.js";
 
 let database: PhotosBridgeDatabase;
 let hub: DeviceHub;
@@ -21,25 +22,30 @@ afterEach(async () => {
     database.close();
 });
 
-describe("DeviceHub durable commands", () => {
-    it("delivers an offline command after reconnect and persists its receipt", async () => {
-        const pairing = database.createPairingSession("https://bridge.test");
+describe("DeviceHub durable plan delivery", () => {
+    it("delivers an immutable plan after reconnect and persists its storage receipt", async () => {
+        const pairing = database.createPairingSession();
         const credentials = database.pairDevice({
             appVersion: "0.1.0",
-            capabilities: ["albums.membership.write"],
+            capabilities: ["albums.create", "albums.membership.write"],
             displayName: "Queued iPhone",
             protocolVersion: 1,
             token: pairing.token,
         });
-        const commandID = hub.enqueue(
-            credentials.deviceID,
-            "plans.approval.request",
-            { plan_id: "plan_test" },
+        const plan = new PlanService(database).create({
+            asset_ids: ["asset-a"],
+            device_id: credentials.deviceID,
+            idempotency_key: "delivery-test",
+            summary: "test",
+            target_album: { create_if_missing: true, name: "Test" },
+        });
+        const deliveryID = hub.enqueuePlanDelivery(
+            plan.plan_id,
             new Date(Date.now() + 60_000).toISOString()
-        );
-        const queued = database.connection.prepare("SELECT status FROM commands WHERE id = ?").get(commandID) as {
-            status: string;
-        };
+        ).delivery_id;
+        const queued = database.connection
+            .prepare("SELECT status FROM plan_deliveries WHERE id = ?")
+            .get(deliveryID) as { status: string };
         assert.equal(queued.status, "queued");
 
         await new Promise<void>((resolve, reject) =>
@@ -54,29 +60,47 @@ describe("DeviceHub durable commands", () => {
 
         await new Promise<void>((resolve, reject) => {
             socket.on("error", reject);
-            socket.on("message", raw => {
+            socket.on("message", async raw => {
                 const envelope = JSON.parse(raw.toString()) as ProtocolEnvelope;
-                if (envelope.type !== "plans.approval.request") return;
-                assert.equal(envelope.message_id, commandID);
+                if (envelope.type !== "plans.delivery.request") return;
+                assert.equal(envelope.message_id, deliveryID);
+                assert.equal((envelope.payload as { plan_id: string }).plan_id, plan.plan_id);
+                assert.deepEqual((envelope.payload as { asset_ids: string[] }).asset_ids, ["asset-a"]);
+                socket.send(
+                    JSON.stringify({
+                        correlation_id: envelope.message_id,
+                        device_id: credentials.deviceID,
+                        message_id: "msg_invalid_receipt",
+                        payload: { plan_id: "plan_wrong", stored: true },
+                        protocol_version: 1,
+                        sent_at: new Date().toISOString(),
+                        type: "plans.delivery.response",
+                    })
+                );
+                await new Promise(wait => setTimeout(wait, 20));
+                const stillSent = database.connection
+                    .prepare("SELECT status FROM plan_deliveries WHERE id = ?")
+                    .get(deliveryID) as { status: string };
+                assert.equal(stillSent.status, "sent");
                 socket.send(
                     JSON.stringify({
                         correlation_id: envelope.message_id,
                         device_id: credentials.deviceID,
                         message_id: "msg_receipt",
-                        payload: { accepted: true, plan_id: "plan_test" },
+                        payload: { plan_id: plan.plan_id, stored: true },
                         protocol_version: 1,
                         sent_at: new Date().toISOString(),
-                        type: "plans.approval.response",
+                        type: "plans.delivery.response",
                     })
                 );
                 setTimeout(resolve, 20);
             });
         });
 
-        const completed = database.connection.prepare("SELECT status FROM commands WHERE id = ?").get(commandID) as {
-            status: string;
-        };
-        assert.equal(completed.status, "completed");
+        const stored = database.connection
+            .prepare("SELECT status FROM plan_deliveries WHERE id = ?")
+            .get(deliveryID) as { status: string };
+        assert.equal(stored.status, "stored");
         socket.close();
     });
 });
