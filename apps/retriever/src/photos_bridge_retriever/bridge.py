@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 from .models import Album, AssetPage
+
+ThumbnailContentMode = Literal["fit", "fill"]
 
 
 class BridgeError(RuntimeError):
@@ -76,13 +78,20 @@ class BridgeClient:
                 return
 
     def get_thumbnail(
-        self, device_id: str, asset_id: str, *, max_dimension: int = 518
+        self,
+        device_id: str,
+        asset_id: str,
+        *,
+        max_dimension: int = 518,
+        content_mode: ThumbnailContentMode = "fit",
     ) -> tuple[bytes, str]:
         if not 1 <= max_dimension <= 1024:
             raise ValueError("max_dimension must be between 1 and 1024")
+        if content_mode not in ("fit", "fill"):
+            raise ValueError("content_mode must be 'fit' or 'fill'")
         path = (
             f"/api/v1/devices/{self._segment(device_id)}/assets/{self._segment(asset_id)}/thumbnail"
-            f"?{urlencode({'max_dimension': str(max_dimension)})}"
+            f"?{urlencode({'max_dimension': str(max_dimension), 'content_mode': content_mode})}"
         )
         body, media_type = self._get(path)
         return body, media_type.split(";", 1)[0].strip() or "application/octet-stream"

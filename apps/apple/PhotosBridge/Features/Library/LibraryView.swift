@@ -79,7 +79,12 @@ private struct AssetCell: View {
             }
         }
         .task(id: asset.id) {
-            image = try? await client.thumbnail(for: asset.id, targetSize: CGSize(width: 240, height: 240), allowsNetwork: allowsNetwork)
+            image = try? await client.thumbnail(
+                for: asset.id,
+                targetSize: CGSize(width: 240, height: 240),
+                contentMode: .fill,
+                allowsNetwork: allowsNetwork
+            )
         }
         .accessibilityLabel(asset.kind == .video ? String(localized: "视频") : String(localized: "照片"))
         .accessibilityIdentifier("asset-\(asset.id)")

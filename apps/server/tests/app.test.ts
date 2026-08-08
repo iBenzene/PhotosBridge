@@ -99,6 +99,60 @@ describe("Photos Bridge Server", () => {
         assert.equal(response.body.error.code, "CAPABILITY_NOT_GRANTED");
     });
 
+    it("forwards thumbnail content mode and keeps fill as the default", async () => {
+        const session = database.createPairingSession();
+        const paired = database.pairDevice({
+            appVersion: "0.1.0",
+            capabilities: ["assets.thumbnail.read"],
+            displayName: "Thumbnail iPhone",
+            protocolVersion: 1,
+            token: session.token,
+        });
+        const requests: unknown[] = [];
+        hub.request = async (_deviceID, _type, payload) => {
+            requests.push(payload);
+            return { data_base64: Buffer.from("jpeg").toString("base64"), mime_type: "image/jpeg" };
+        };
+
+        await request(app())
+            .get(`/api/v1/devices/${paired.deviceID}/assets/asset-1/thumbnail`)
+            .set("Authorization", `Bearer ${adminKey}`)
+            .expect(200);
+        await request(app())
+            .get(`/api/v1/devices/${paired.deviceID}/assets/asset-1/thumbnail?max_dimension=518&content_mode=fit`)
+            .set("Authorization", `Bearer ${adminKey}`)
+            .expect(200);
+
+        assert.deepEqual(requests, [
+            { asset_id: "asset-1", content_mode: "fill", max_dimension: 768 },
+            { asset_id: "asset-1", content_mode: "fit", max_dimension: 518 },
+        ]);
+    });
+
+    it("rejects invalid thumbnail content modes before contacting the device", async () => {
+        const session = database.createPairingSession();
+        const paired = database.pairDevice({
+            appVersion: "0.1.0",
+            capabilities: ["assets.thumbnail.read"],
+            displayName: "Thumbnail iPhone",
+            protocolVersion: 1,
+            token: session.token,
+        });
+        let called = false;
+        hub.request = async () => {
+            called = true;
+            return {};
+        };
+
+        const response = await request(app())
+            .get(`/api/v1/devices/${paired.deviceID}/assets/asset-1/thumbnail?content_mode=stretch`)
+            .set("Authorization", `Bearer ${adminKey}`)
+            .expect(400);
+
+        assert.equal(response.body.error.code, "INVALID_THUMBNAIL_CONTENT_MODE");
+        assert.equal(called, false);
+    });
+
     it("lets an authenticated device revoke its own credential", async () => {
         const session = database.createPairingSession();
         const paired = database.pairDevice({

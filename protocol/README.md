@@ -63,6 +63,12 @@ than an empty library.
 - `albums.assets.request` / `albums.assets.response`
 - `plans.delivery.request` / `plans.delivery.response`
 
+`assets.thumbnail.request` accepts `asset_id`, optional `max_dimension`, and
+optional `content_mode`. Missing `content_mode` means `fill` for backward
+compatibility. `content_mode=fill` requests a UI-style aspect-fill thumbnail;
+`content_mode=fit` requests an aspect-fit thumbnail that preserves the full
+composition. Other values are rejected explicitly and never mapped to PhotoKit.
+
 ## Pagination
 
 Asset cursors are opaque and bound to `snapshot_id`. The maximum page size is 500. A library change may invalidate a snapshot; the device then returns

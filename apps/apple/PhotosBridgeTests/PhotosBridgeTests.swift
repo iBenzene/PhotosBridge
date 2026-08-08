@@ -394,7 +394,12 @@ private final class MockPhotoLibraryClient: PhotoLibraryClient {
         return AssetPage(snapshotID: "snapshot", items: [asset("asset-b"), asset("asset-c")], nextCursor: nil)
     }
 
-    func thumbnail(for assetID: String, targetSize: CGSize, allowsNetwork: Bool) async throws -> UIImage { UIImage() }
+    func thumbnail(
+        for assetID: String,
+        targetSize: CGSize,
+        contentMode: ThumbnailContentMode,
+        allowsNetwork: Bool
+    ) async throws -> UIImage { UIImage() }
     func asset(id: String) async throws -> AssetDescriptor { asset(id) }
     func albums() async throws -> [AlbumDescriptor] { [] }
     func assetIDs(inAlbum albumID: String) async throws -> [String] { [] }

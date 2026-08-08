@@ -230,6 +230,7 @@ private struct PlanThumbnailView: View {
             image = try? await client.thumbnail(
                 for: assetID,
                 targetSize: CGSize(width: 180, height: 180),
+                contentMode: .fill,
                 allowsNetwork: allowsNetwork
             )
         }

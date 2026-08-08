@@ -89,9 +89,19 @@ def test_reads_albums_members_and_thumbnail_without_write_methods() -> None:
     assert thumbnail == b"jpeg"
     assert media_type == "image/jpeg"
     assert "/album%2F1/assets" in client.requests[1].full_url
-    assert "/asset%2F1/thumbnail?max_dimension=518" in client.requests[2].full_url
+    assert "/asset%2F1/thumbnail?max_dimension=518&content_mode=fit" in client.requests[2].full_url
     assert not hasattr(client, "create_plan")
     assert not hasattr(client, "deliver_plan")
+
+
+def test_thumbnail_can_request_fill_and_rejects_unknown_content_mode() -> None:
+    client = StubBridgeClient([(b"jpeg", "image/jpeg")])
+
+    client.get_thumbnail("device-1", "asset-1", content_mode="fill")
+
+    assert "/asset-1/thumbnail?max_dimension=518&content_mode=fill" in client.requests[0].full_url
+    with pytest.raises(ValueError, match="content_mode"):
+        client.get_thumbnail("device-1", "asset-1", content_mode="stretch")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("limit", [0, 501])

@@ -31,11 +31,17 @@ store = RetrieverStore()
 
 page = client.list_assets("device_01", limit=500)
 store.upsert_assets("device_01", page.items)
+thumbnail, media_type = client.get_thumbnail("device_01", page.items[0].id)
 
 queries = workflow_encoder(reference_images)
 candidates = store.load_embeddings("device_01", "model-fingerprint")
 matches = cosine_search(queries, candidates, top_k=100)
 ```
+
+`BridgeClient.get_thumbnail()` defaults to `content_mode="fit"` so retrieval
+indexes receive the complete thumbnail composition. Pass `content_mode="fill"`
+only for UI-style square crops. The client rejects other values before making an
+HTTP request.
 
 The encoder, reference selection, thresholds, evidence fusion, and review flow
 in this example are intentionally owned by the workflow.
@@ -45,4 +51,3 @@ in this example are intentionally owned by the workflow.
 ```powershell
 python -m pytest --rootdir apps/retriever apps/retriever/tests
 ```
-

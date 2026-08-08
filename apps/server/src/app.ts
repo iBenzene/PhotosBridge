@@ -150,8 +150,13 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
         requireDeviceCapability(database, "assets.thumbnail.read"),
         async (request, response, next) => {
             try {
+                const contentMode = parseThumbnailContentMode(request.query.content_mode);
+                if (!contentMode) {
+                    return void response.status(400).json({ error: { code: "INVALID_THUMBNAIL_CONTENT_MODE" } });
+                }
                 const payload = (await hub.request(String(request.params.deviceID), "assets.thumbnail.request", {
                     asset_id: String(request.params.assetID),
+                    content_mode: contentMode,
                     max_dimension: Math.min(Number(request.query.max_dimension ?? 768), 1024),
                 })) as { data_base64?: string; mime_type?: string };
                 if (!payload.data_base64)
@@ -203,6 +208,11 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
         return response.status(500).json({ error: { code: "INTERNAL_ERROR" } });
     });
     return app;
+};
+
+const parseThumbnailContentMode = (value: unknown): "fit" | "fill" | undefined => {
+    if (value === undefined) return "fill";
+    return value === "fit" || value === "fill" ? value : undefined;
 };
 
 const requireScope =

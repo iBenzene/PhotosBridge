@@ -35,7 +35,12 @@ final class DemoPhotoLibraryClient: PhotoLibraryClient {
         }
         return asset
     }
-    func thumbnail(for assetID: String, targetSize: CGSize, allowsNetwork: Bool) async throws -> UIImage {
+    func thumbnail(
+        for assetID: String,
+        targetSize: CGSize,
+        contentMode: ThumbnailContentMode,
+        allowsNetwork: Bool
+    ) async throws -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 240, height: 240))
         return renderer.image { context in
             UIColor.systemIndigo.setFill()

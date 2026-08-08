@@ -8,6 +8,11 @@
 import CoreGraphics
 import UIKit
 
+enum ThumbnailContentMode: String, Sendable {
+    case fit
+    case fill
+}
+
 @MainActor
 protocol PhotoLibraryClient: AnyObject {
     func authorizationLevel() -> PhotoAccessLevel
@@ -15,7 +20,12 @@ protocol PhotoLibraryClient: AnyObject {
     func presentLimitedLibraryPicker()
     func assetPage(snapshotID: String?, cursor: String?, limit: Int) async throws -> AssetPage
     func asset(id: String) async throws -> AssetDescriptor
-    func thumbnail(for assetID: String, targetSize: CGSize, allowsNetwork: Bool) async throws -> UIImage
+    func thumbnail(
+        for assetID: String,
+        targetSize: CGSize,
+        contentMode: ThumbnailContentMode,
+        allowsNetwork: Bool
+    ) async throws -> UIImage
     func albums() async throws -> [AlbumDescriptor]
     func assetIDs(inAlbum albumID: String) async throws -> [String]
     func add(assetIDs: [String], toAlbumNamed albumName: String, createIfMissing: Bool) async throws -> OperationResult

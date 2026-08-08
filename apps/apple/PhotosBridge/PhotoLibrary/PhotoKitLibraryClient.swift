@@ -73,7 +73,12 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
         )
     }
 
-    func thumbnail(for assetID: String, targetSize: CGSize, allowsNetwork: Bool) async throws -> UIImage {
+    func thumbnail(
+        for assetID: String,
+        targetSize: CGSize,
+        contentMode: ThumbnailContentMode,
+        allowsNetwork: Bool
+    ) async throws -> UIImage {
         guard authorizationLevel().canRead else { throw PhotoLibraryFailure.permissionInsufficient }
         guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [assetID], options: nil).firstObject else {
             throw PhotoLibraryFailure.photoKit(String(localized: "资源不存在或不在当前授权范围内。"))
@@ -88,7 +93,7 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
             imageManager.requestImage(
                 for: asset,
                 targetSize: targetSize,
-                contentMode: .aspectFill,
+                contentMode: contentMode.photoKitContentMode,
                 options: options
             ) { image, info in
                 if let cancelled = info?[PHImageCancelledKey] as? Bool, cancelled {
@@ -343,5 +348,14 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
             isHidden: asset.isHidden,
             hasLocation: asset.location != nil
         )
+    }
+}
+
+private extension ThumbnailContentMode {
+    var photoKitContentMode: PHImageContentMode {
+        switch self {
+        case .fit: .aspectFit
+        case .fill: .aspectFill
+        }
     }
 }

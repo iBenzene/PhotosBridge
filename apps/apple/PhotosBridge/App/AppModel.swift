@@ -276,9 +276,24 @@ final class AppModel {
                     throw PhotoLibraryFailure.photoKit(String(localized: "缺少 asset_id。"))
                 }
                 let dimension = Double(envelope.payload["max_dimension"]?.stringValue ?? "768") ?? 768
+                let contentModeValue = envelope.payload["content_mode"]?.stringValue ?? ThumbnailContentMode.fill.rawValue
+                guard let contentMode = ThumbnailContentMode(rawValue: contentModeValue) else {
+                    await serverConnection.sendResponse(
+                        to: envelope,
+                        type: "assets.thumbnail.error",
+                        payload: .object([
+                            "code": .string("INVALID_THUMBNAIL_CONTENT_MODE"),
+                            "message": .string(
+                                String(format: String(localized: "无效的 content_mode：%@。"), contentModeValue)
+                            )
+                        ])
+                    )
+                    return
+                }
                 let image = try await photoLibrary.thumbnail(
                     for: assetID,
                     targetSize: CGSize(width: dimension, height: dimension),
+                    contentMode: contentMode,
                     allowsNetwork: allowsICloudDownload
                 )
                 guard let data = image.jpegData(compressionQuality: 0.86) else {

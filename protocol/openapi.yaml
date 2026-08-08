@@ -54,6 +54,30 @@ paths:
                 - { name: limit, in: query, schema: { type: integer, maximum: 500 } }
             responses:
                 "200": { description: Asset page }
+    /devices/{device_id}/assets/{asset_id}:
+        get:
+            summary: Read one asset descriptor through an online device
+            parameters:
+                - { name: device_id, in: path, required: true, schema: { type: string } }
+                - { name: asset_id, in: path, required: true, schema: { type: string } }
+            responses:
+                "200": { description: Asset descriptor }
+                "503": { description: Device offline }
+    /devices/{device_id}/assets/{asset_id}/thumbnail:
+        get:
+            summary: Read an asset thumbnail through an online device
+            parameters:
+                - { name: device_id, in: path, required: true, schema: { type: string } }
+                - { name: asset_id, in: path, required: true, schema: { type: string } }
+                - { name: max_dimension, in: query, schema: { type: integer, maximum: 1024, default: 768 } }
+                - name: content_mode
+                  in: query
+                  description: Thumbnail framing mode. Defaults to fill for backward compatibility.
+                  schema: { type: string, enum: [fit, fill], default: fill }
+            responses:
+                "200": { description: JPEG thumbnail bytes }
+                "400": { description: Invalid thumbnail content mode }
+                "503": { description: Device offline }
     /plans:
         post:
             summary: Create an immutable album membership plan
