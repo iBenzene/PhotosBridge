@@ -68,6 +68,27 @@ def test_embeddings_are_normalized_versioned_and_round_trip(tmp_path: Path) -> N
         assert len(store.load_embeddings("device", "model-b")) == 1
 
 
+def test_embeddings_support_batch_writes(tmp_path: Path) -> None:
+    with RetrieverStore(tmp_path) as store:
+        assert (
+            store.put_embeddings(
+                "device",
+                "model",
+                [
+                    ("asset-1", np.array([3.0, 4.0], dtype=np.float32)),
+                    ("asset-2", np.array([0.0, 2.0], dtype=np.float32)),
+                ],
+            )
+            == 2
+        )
+
+        embeddings = store.load_embeddings("device", "model")
+
+        assert [item.asset_id for item in embeddings] == ["asset-1", "asset-2"]
+        assert embeddings[0].vector == pytest.approx([0.6, 0.8], abs=5e-4)
+        assert embeddings[1].vector == pytest.approx([0.0, 1.0], abs=5e-4)
+
+
 def test_perceptual_hashes_are_algorithm_scoped(tmp_path: Path) -> None:
     with RetrieverStore(tmp_path) as store:
         store.put_hash("device", "phash-64", "asset", 0xFF, 64)
@@ -75,6 +96,21 @@ def test_perceptual_hashes_are_algorithm_scoped(tmp_path: Path) -> None:
 
         assert store.load_hashes("device", "phash-64") == {"asset": 0xFF}
         assert store.load_hashes("device", "dhash-64") == {"asset": 0xAA}
+
+
+def test_perceptual_hashes_support_batch_writes(tmp_path: Path) -> None:
+    with RetrieverStore(tmp_path) as store:
+        assert (
+            store.put_hashes(
+                "device", "phash-64", [("asset-1", 0xFF), ("asset-2", 0xAA)], 64
+            )
+            == 2
+        )
+
+        assert store.load_hashes("device", "phash-64") == {
+            "asset-1": 0xFF,
+            "asset-2": 0xAA,
+        }
 
 
 def asset(asset_id: str) -> Asset:

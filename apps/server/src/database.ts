@@ -36,9 +36,18 @@ export class PhotosBridgeDatabase {
 
     seedAdminKey(key: string): void {
         const existing = this.connection
-            .prepare("SELECT id FROM api_keys WHERE name = ? AND revoked_at IS NULL")
-            .get("bootstrap-admin");
-        if (existing) return;
+            .prepare("SELECT id, key_hash FROM api_keys WHERE name = ? AND revoked_at IS NULL")
+            .get("bootstrap-admin") as { id: string; key_hash: string } | undefined;
+        const keyHash = hashSecret(key);
+        const scopes = JSON.stringify(["admin", "library.read", "plans.write"]);
+        if (existing) {
+            if (existing.key_hash !== keyHash) {
+                this.connection
+                    .prepare("UPDATE api_keys SET key_hash = ?, scopes_json = ? WHERE id = ?")
+                    .run(keyHash, scopes, existing.id);
+            }
+            return;
+        }
         this.connection
             .prepare(
                 `
@@ -49,8 +58,8 @@ export class PhotosBridgeDatabase {
             .run(
                 id("key"),
                 "bootstrap-admin",
-                hashSecret(key),
-                JSON.stringify(["admin", "library.read", "plans.write"])
+                keyHash,
+                scopes
             );
     }
 

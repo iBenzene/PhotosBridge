@@ -174,10 +174,30 @@ class RetrieverStore:
     def put_embedding(
         self, device_id: str, model_fingerprint: str, asset_id: str, vector: np.ndarray
     ) -> None:
-        normalized = self._normalize_vector(vector)
-        encoded = normalized.astype("<f2").tobytes()
+        self.put_embeddings(device_id, model_fingerprint, [(asset_id, vector)])
+
+    def put_embeddings(
+        self,
+        device_id: str,
+        model_fingerprint: str,
+        embeddings: Iterable[tuple[str, np.ndarray]],
+    ) -> int:
+        rows = []
+        for asset_id, vector in embeddings:
+            normalized = self._normalize_vector(vector)
+            rows.append(
+                (
+                    device_id,
+                    model_fingerprint,
+                    asset_id,
+                    normalized.size,
+                    normalized.astype("<f2").tobytes(),
+                )
+            )
+        if not rows:
+            return 0
         with self.connection:
-            self.connection.execute(
+            self.connection.executemany(
                 """
                 INSERT INTO embeddings (device_id, model_fingerprint, asset_id, dimensions, vector)
                 VALUES (?, ?, ?, ?, ?)
@@ -185,8 +205,9 @@ class RetrieverStore:
                     dimensions = excluded.dimensions,
                     vector = excluded.vector
                 """,
-                (device_id, model_fingerprint, asset_id, normalized.size, encoded),
+                rows,
             )
+        return len(rows)
 
     def load_embeddings(
         self, device_id: str, model_fingerprint: str
@@ -213,11 +234,27 @@ class RetrieverStore:
     def put_hash(
         self, device_id: str, algorithm: str, asset_id: str, value: int, bits: int
     ) -> None:
-        if not algorithm or value < 0 or bits < 1 or value.bit_length() > bits:
+        self.put_hashes(device_id, algorithm, [(asset_id, value)], bits)
+
+    def put_hashes(
+        self,
+        device_id: str,
+        algorithm: str,
+        hashes: Iterable[tuple[str, int]],
+        bits: int,
+    ) -> int:
+        if not algorithm or bits < 1:
             raise ValueError("invalid perceptual hash")
         width = (bits + 3) // 4
+        rows = []
+        for asset_id, value in hashes:
+            if value < 0 or value.bit_length() > bits:
+                raise ValueError("invalid perceptual hash")
+            rows.append((device_id, algorithm, asset_id, bits, f"{value:0{width}x}"))
+        if not rows:
+            return 0
         with self.connection:
-            self.connection.execute(
+            self.connection.executemany(
                 """
                 INSERT INTO perceptual_hashes (device_id, algorithm, asset_id, bits, value)
                 VALUES (?, ?, ?, ?, ?)
@@ -225,8 +262,9 @@ class RetrieverStore:
                     bits = excluded.bits,
                     value = excluded.value
                 """,
-                (device_id, algorithm, asset_id, bits, f"{value:0{width}x}"),
+                rows,
             )
+        return len(rows)
 
     def load_hashes(self, device_id: str, algorithm: str) -> dict[str, int]:
         rows = self.connection.execute(

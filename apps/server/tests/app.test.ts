@@ -35,6 +35,14 @@ describe("Photos Bridge Server", () => {
         await request(app()).get("/api/v1/devices").expect(401);
     });
 
+    it("keeps the active bootstrap admin key aligned with the current server session", () => {
+        const rotatedKey = "rotated-admin-key-with-enough-entropy";
+        database.seedAdminKey(rotatedKey);
+
+        assert.equal(database.authenticateAPIKey(adminKey), null);
+        assert.deepEqual(database.authenticateAPIKey(rotatedKey)?.scopes, ["admin", "library.read", "plans.write"]);
+    });
+
     it("pairs a device exactly once and lists it", async () => {
         const pairing = await request(app())
             .post("/api/v1/pairing-sessions")
