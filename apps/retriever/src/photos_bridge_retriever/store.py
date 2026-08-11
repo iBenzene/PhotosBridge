@@ -97,6 +97,37 @@ class RetrieverStore:
         ).fetchall()
         return tuple(self._asset(row) for row in rows)
 
+    def prune_assets(self, device_id: str, retained_asset_ids: Iterable[str]) -> int:
+        retained = sorted({asset_id for asset_id in retained_asset_ids if asset_id})
+        with self.connection:
+            self.connection.execute(
+                "CREATE TEMP TABLE IF NOT EXISTS retained_assets (asset_id TEXT PRIMARY KEY) WITHOUT ROWID"
+            )
+            self.connection.execute("DELETE FROM retained_assets")
+            self.connection.executemany(
+                "INSERT INTO retained_assets (asset_id) VALUES (?)",
+                ((asset_id,) for asset_id in retained),
+            )
+            for table in ("album_assets", "embeddings", "perceptual_hashes"):
+                self.connection.execute(
+                    f"""
+                    DELETE FROM {table}
+                    WHERE device_id = ?
+                      AND asset_id NOT IN (SELECT asset_id FROM retained_assets)
+                    """,
+                    (device_id,),
+                )
+            result = self.connection.execute(
+                """
+                DELETE FROM assets
+                WHERE device_id = ?
+                  AND asset_id NOT IN (SELECT asset_id FROM retained_assets)
+                """,
+                (device_id,),
+            )
+            self.connection.execute("DELETE FROM retained_assets")
+        return result.rowcount
+
     def replace_album_assets(
         self, device_id: str, album_id: str, asset_ids: Iterable[str]
     ) -> None:

@@ -49,6 +49,21 @@ def test_thumbnail_requires_catalogued_asset(tmp_path: Path) -> None:
         store.store_thumbnail("device", "missing", b"jpeg", "image/jpeg")
 
 
+def test_prunes_missing_assets_and_their_derived_features(tmp_path: Path) -> None:
+    with RetrieverStore(tmp_path) as store:
+        store.upsert_assets("device", [asset("keep"), asset("remove")])
+        store.replace_album_assets("device", "album", ["keep", "remove"])
+        store.put_embedding("device", "model", "remove", np.array([1.0, 0.0]))
+        store.put_hash("device", "phash-64", "remove", 0xFF, 64)
+
+        assert store.prune_assets("device", ["keep"]) == 1
+
+        assert [item.id for item in store.load_assets("device")] == ["keep"]
+        assert store.load_album_assets("device", "album") == ("keep",)
+        assert store.load_embeddings("device", "model") == ()
+        assert store.load_hashes("device", "phash-64") == {}
+
+
 def test_embeddings_are_normalized_versioned_and_round_trip(tmp_path: Path) -> None:
     with RetrieverStore(tmp_path) as store:
         store.put_embedding(
