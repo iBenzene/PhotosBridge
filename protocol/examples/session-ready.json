@@ -1,0 +1,9 @@
+{
+    "protocol_version": 1,
+    "message_id": "msg_01",
+    "correlation_id": null,
+    "device_id": "device_01",
+    "type": "session.ready",
+    "sent_at": "2026-07-29T12:00:00Z",
+    "payload": { "heartbeat_seconds": 25 }
+}

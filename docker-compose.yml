@@ -1,0 +1,18 @@
+services:
+    photos-bridge-server:
+        build:
+            context: .
+            dockerfile: apps/server/Dockerfile
+        ports:
+            - "8787:8787"
+        environment:
+            PORT: "8787"
+            DATABASE_PATH: /data/photos-bridge.sqlite
+            PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set PUBLIC_BASE_URL to the trusted HTTPS address}
+            PHOTOS_BRIDGE_ADMIN_KEY: ${PHOTOS_BRIDGE_ADMIN_KEY:?Set a random high-entropy admin key}
+        volumes:
+            - photos-bridge-data:/data
+        restart: unless-stopped
+
+volumes:
+    photos-bridge-data:

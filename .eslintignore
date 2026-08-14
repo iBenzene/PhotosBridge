@@ -1,0 +1,13 @@
+# Build outputs and dependencies
+node_modules
+dist
+build
+apps/*/dist
+
+# Data and SQLite files
+data/
+*.sqlite
+*.db
+
+# Temporary files
+.DS_Store

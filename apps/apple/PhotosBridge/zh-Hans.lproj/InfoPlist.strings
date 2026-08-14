@@ -1,0 +1,5 @@
+"CFBundleDisplayName" = "照片桥";
+"NSCameraUsageDescription" = "照片桥使用相机扫描由您选择的服务器显示的一次性配对二维码。";
+"NSLocalNetworkUsageDescription" = "照片桥需要访问您当前的局域网，以连接 Photos Bridge 服务器。";
+"NSPhotoLibraryAddUsageDescription" = "照片桥仅在您明确批准写入计划后，将选中的照片加入指定相册。";
+"NSPhotoLibraryUsageDescription" = "照片桥读取您授权的照片和相册，用于生成缩略图并执行您确认的整理计划。";
