@@ -356,6 +356,7 @@ class RetrieverStore:
                 value TEXT NOT NULL,
                 PRIMARY KEY (device_id, algorithm, asset_id)
             );
+            CREATE INDEX IF NOT EXISTS idx_assets_asset_id ON assets(asset_id);
             """
         )
         row = self.connection.execute(
