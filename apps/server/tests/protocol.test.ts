@@ -13,14 +13,18 @@ const applyFormats = addFormats as unknown as (ajv: InstanceType<typeof AjvConst
 const protocolRoot = path.resolve("../../protocol");
 
 describe("Protocol fixtures", () => {
-    for (const name of ["envelope", "plan"]) {
-        it(`validates the ${name} example`, () => {
+    for (const [name, exampleName] of [
+        ["envelope", "session-ready"],
+        ["plan", "plan"],
+        ["plan", "plan-remove"],
+        ["plan", "plan-move"],
+    ]) {
+        it(`validates the ${exampleName} example`, () => {
             const ajv = new AjvConstructor({ strict: true });
             applyFormats(ajv);
             const schema = JSON.parse(
                 fs.readFileSync(path.join(protocolRoot, "schemas", `${name}.schema.json`), "utf8")
             );
-            const exampleName = name === "envelope" ? "session-ready" : name;
             const example = JSON.parse(
                 fs.readFileSync(path.join(protocolRoot, "examples", `${exampleName}.json`), "utf8")
             );

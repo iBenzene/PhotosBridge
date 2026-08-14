@@ -6,6 +6,7 @@
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import type { PhotosBridgeDatabase } from "./database.js";
+import { presentStoredPlan } from "./plans.js";
 import { id } from "./database.js";
 
 export type ProtocolEnvelope = {
@@ -192,7 +193,8 @@ export class DeviceHub {
             .prepare(
                 `
       SELECT pd.id, p.id AS plan_id, p.summary,
-             p.target_album_json, p.asset_ids_json, p.content_hash, p.created_at
+             p.operation, p.source_album_json, p.target_album_json,
+             p.asset_ids_json, p.content_hash, p.created_at
       FROM plan_deliveries pd JOIN plans p ON p.id = pd.plan_id
       WHERE p.device_id = ? AND pd.status IN ('queued', 'sent') AND pd.delivery_expires_at > ?
       ORDER BY pd.created_at ASC
@@ -200,17 +202,13 @@ export class DeviceHub {
             )
             .all(deviceID, new Date().toISOString()) as Array<Record<string, unknown>>;
         for (const delivery of deliveries) {
+            const plan = presentStoredPlan({ ...delivery, device_id: deviceID, id: delivery.plan_id });
             const envelope: ProtocolEnvelope = {
                 correlation_id: null,
                 device_id: deviceID,
                 message_id: String(delivery.id),
                 payload: {
-                    asset_ids: JSON.parse(String(delivery.asset_ids_json)),
-                    content_hash: String(delivery.content_hash),
-                    created_at: String(delivery.created_at),
-                    plan_id: String(delivery.plan_id),
-                    summary: String(delivery.summary),
-                    target_album: JSON.parse(String(delivery.target_album_json)),
+                    ...plan,
                 },
                 protocol_version: 1,
                 sent_at: new Date().toISOString(),

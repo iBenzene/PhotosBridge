@@ -1,0 +1,11 @@
+{
+    "plan_id": "plan_move_01",
+    "device_id": "device_01",
+    "operation": "album_members.move",
+    "summary": "Move reviewed photos from Source to Target",
+    "source_album": { "id": "album_source", "name": "Source" },
+    "target_album": { "id": "album_target", "name": "Target", "create_if_missing": false },
+    "asset_ids": ["asset_01", "asset_02"],
+    "content_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "created_at": "2026-07-29T12:00:00Z"
+}

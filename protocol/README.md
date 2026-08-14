@@ -1,7 +1,7 @@
 # Photos Bridge Protocol
 
-Status: Draft (Protocol v1)  
-Protocol version: 1
+Status: Draft (Protocol v1.1 profile)
+Transport protocol version: 1
 
 Photos Bridge Protocol is vendor-neutral. PhotoKit local identifiers are opaque
 and device-scoped, and external callers never invoke arbitrary PhotoKit APIs.
@@ -81,3 +81,22 @@ Plan hashes are SHA-256 over canonical JSON with recursively sorted
 object keys, compact separators, UTF-8 encoding, and stable array order. Asset
 IDs are deduplicated and sorted before hashing. The device reconstructs and
 verifies the same canonical content before presenting approval.
+
+Write plans created by the v1.1 profile include an explicit `operation` field:
+
+- `album_members.add` requires `target_album` and may create it.
+- `album_members.remove` requires an existing `source_album` identified by its
+  device-scoped album ID.
+- `album_members.move` requires existing source and target album IDs. The
+  device adds members to the target and removes them from the source in one
+  PhotoKit change transaction. It rejects target creation and identical source
+  and target IDs.
+
+The operation and all operation-specific album references are part of the
+canonical hashed content, so changing any of them invalidates the plan.
+
+For rolling upgrades, peers accept legacy plans without `operation` and treat
+them as `album_members.add`; legacy hashes are verified without injecting the
+missing field. New plans always include `operation`. Unknown operation values
+or invalid field combinations are rejected explicitly and are never mapped to
+a PhotoKit action.

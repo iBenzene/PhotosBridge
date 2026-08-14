@@ -22,6 +22,7 @@ struct PhotosBridgeTests {
         )
 
         #expect(plan.summary == "本机验证")
+        #expect(plan.operation == .albumMembersAdd)
         #expect(plan.targetAlbumName == "Photos Bridge Test")
         #expect(plan.assetIDs == ["asset-a", "asset-b"])
     }
@@ -49,10 +50,44 @@ struct PhotosBridgeTests {
         let content: JSONValue = .object([
             "asset_ids": .array([.string("asset-a"), .string("asset-b")]),
             "device_id": .string("device-1"),
+            "operation": .string("album_members.add"),
             "summary": .string("test"),
             "target_album": .object(["create_if_missing": .bool(true), "name": .string("Album")])
         ])
-        #expect(try content.canonicalSHA256() == "ee93904abd462f0245f3cd569ace8a0fdeaee835d5ba6c8698bae14840999dd7")
+        #expect(try content.canonicalSHA256() == "c5f4ed04a3ccea09760304442e8a46703fb6da278f40229bd95aefebfeef8138")
+    }
+
+    @Test func removalAndMoveCanonicalHashesMatchServerFixtures() throws {
+        let common: [String: JSONValue] = [
+            "asset_ids": .array([.string("asset-a"), .string("asset-b")]),
+            "device_id": .string("device-1"),
+            "source_album": .object(["id": .string("album-source"), "name": .string("Source")]),
+            "summary": .string("test")
+        ]
+        let removal = JSONValue.object(common.merging([
+            "operation": .string("album_members.remove")
+        ]) { _, right in right })
+        let move = JSONValue.object(common.merging([
+            "operation": .string("album_members.move"),
+            "target_album": .object([
+                "create_if_missing": .bool(false),
+                "id": .string("album-target"),
+                "name": .string("Target")
+            ])
+        ]) { _, right in right })
+
+        #expect(try removal.canonicalSHA256() == "50e22caf715f005420fea43644fa96b3412651aef37f0f7e0e436de4ae824e9d")
+        #expect(try move.canonicalSHA256() == "063f466a5e40e87cb4678b1a53d9ead816b7a2326120aaf543df2c25d3bfb1f8")
+    }
+
+    @Test @MainActor func writePlanDecodesLegacyJournalWithoutOperation() throws {
+        let data = Data(#"{"id":"plan_legacy","contentHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","serverURL":null,"createdAt":0,"summary":"legacy","targetAlbumName":"Album","createAlbumIfMissing":false,"assetIDs":["asset-a"]}"#.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .secondsSince1970
+
+        let plan = try decoder.decode(WritePlan.self, from: data)
+
+        #expect(plan.operation == .albumMembersAdd)
     }
 
     @Test @MainActor func protocolEnvelopeAcceptsServerDatesWithFractionalSeconds() throws {
@@ -150,6 +185,95 @@ struct PhotosBridgeTests {
         #expect(model.pendingPlans.isEmpty)
         #expect(model.historyRecords.count == 1)
         try? FileManager.default.removeItem(at: fileURL)
+    }
+
+    @Test func removalSelectionDeduplicatesAndReportsMissingSourceMembers() {
+        let selection = MembershipMutationSelection.remove(
+            requestedAssetIDs: ["asset-b", "asset-a", "asset-b", "asset-missing"],
+            sourceMemberIDs: ["asset-a", "asset-b", "asset-c"]
+        )
+
+        #expect(selection.selectedAssetIDs == ["asset-a", "asset-b"])
+        #expect(selection.missingFromSourceAssetIDs == ["asset-missing"])
+    }
+
+    @Test func moveSelectionSeparatesAdditionsFromExistingTargetMembers() {
+        let selection = MembershipMutationSelection.move(
+            requestedAssetIDs: ["asset-c", "asset-b", "asset-a", "asset-missing"],
+            sourceMemberIDs: ["asset-a", "asset-b", "asset-c"],
+            targetMemberIDs: ["asset-b", "asset-z"]
+        )
+
+        #expect(selection.selectedAssetIDs == ["asset-a", "asset-b", "asset-c"])
+        #expect(selection.additionsToTargetAssetIDs == ["asset-a", "asset-c"])
+        #expect(selection.alreadyPresentAtTargetAssetIDs == ["asset-b"])
+        #expect(selection.missingFromSourceAssetIDs == ["asset-missing"])
+    }
+
+    @Test @MainActor func remoteRemovalUsesFirstClassRemoveOperation() async {
+        let client = MockPhotoLibraryClient()
+        let (model, fileURL) = Self.makeTestModel(client: client)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let plan = WritePlan(
+            id: "plan_remove", contentHash: String(repeating: "a", count: 64), serverURL: nil,
+            operation: .albumMembersRemove, summary: "remove",
+            sourceAlbumID: "album-source", sourceAlbumName: "Source",
+            assetIDs: ["asset-a"]
+        )
+        model.pendingPlans = [plan]
+
+        await model.executePlan(id: plan.id)
+
+        #expect(client.lastRemovedAssetIDs == ["asset-a"])
+        #expect(client.lastRemovedAlbumID == "album-source")
+        #expect(client.lastAddedAssetIDs == nil)
+        #expect(model.pendingPlans.isEmpty)
+    }
+
+    @Test @MainActor func partialRemovalFailureKeepsPlanForIdempotentRetry() async {
+        let client = MockPhotoLibraryClient()
+        client.nextRemoveResult = UndoResult(
+            removedAssetIDs: ["asset-a"],
+            missingAssetIDs: [],
+            failedAssetIDs: ["asset-b"]
+        )
+        let (model, fileURL) = Self.makeTestModel(client: client)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let plan = WritePlan(
+            id: "plan_partial_remove", contentHash: String(repeating: "a", count: 64), serverURL: nil,
+            operation: .albumMembersRemove, summary: "remove",
+            sourceAlbumID: "album-source", sourceAlbumName: "Source",
+            assetIDs: ["asset-a", "asset-b"]
+        )
+        model.pendingPlans = [plan]
+
+        await model.executePlan(id: plan.id)
+
+        #expect(model.pendingPlans == [plan])
+        #expect(model.errorMessage != nil)
+    }
+
+    @Test @MainActor func remoteMoveUsesSingleAtomicMoveOperation() async {
+        let client = MockPhotoLibraryClient()
+        let (model, fileURL) = Self.makeTestModel(client: client)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let plan = WritePlan(
+            id: "plan_move", contentHash: String(repeating: "a", count: 64), serverURL: nil,
+            operation: .albumMembersMove, summary: "move",
+            sourceAlbumID: "album-source", sourceAlbumName: "Source",
+            targetAlbumID: "album-target", targetAlbumName: "Target",
+            assetIDs: ["asset-a"]
+        )
+        model.pendingPlans = [plan]
+
+        await model.executePlan(id: plan.id)
+
+        #expect(client.lastMovedAssetIDs == ["asset-a"])
+        #expect(client.lastMoveSourceAlbumID == "album-source")
+        #expect(client.lastMoveTargetAlbumID == "album-target")
+        #expect(client.lastAddedAssetIDs == nil)
+        #expect(client.lastRemovedAssetIDs == nil)
+        #expect(model.pendingPlans.isEmpty)
     }
 
     @Test @MainActor func planPreservesDoNotCreateAlbumPolicyOffline() async {
@@ -377,10 +501,16 @@ struct PhotosBridgeTests {
 private final class MockPhotoLibraryClient: PhotoLibraryClient {
     private var page = 0
     var nextRestoreResult: RestoreResult?
+    var nextRemoveResult: UndoResult?
     private(set) var lastRestoreAssetIDs: [String]?
     private(set) var lastRestoreAlbumID: String?
     private(set) var lastAddedAssetIDs: [String]?
     private(set) var lastCreateIfMissing: Bool?
+    private(set) var lastRemovedAssetIDs: [String]?
+    private(set) var lastRemovedAlbumID: String?
+    private(set) var lastMovedAssetIDs: [String]?
+    private(set) var lastMoveSourceAlbumID: String?
+    private(set) var lastMoveTargetAlbumID: String?
 
     func authorizationLevel() -> PhotoAccessLevel { .full }
     func requestAuthorization() async -> PhotoAccessLevel { .full }
@@ -424,7 +554,20 @@ private final class MockPhotoLibraryClient: PhotoLibraryClient {
     }
 
     func remove(assetIDs: [String], fromAlbumID albumID: String) async throws -> UndoResult {
-        UndoResult(removedAssetIDs: assetIDs, missingAssetIDs: [], failedAssetIDs: [])
+        lastRemovedAssetIDs = assetIDs
+        lastRemovedAlbumID = albumID
+        return nextRemoveResult ?? UndoResult(removedAssetIDs: assetIDs, missingAssetIDs: [], failedAssetIDs: [])
+    }
+
+    func move(assetIDs: [String], fromAlbumID: String, toAlbumID: String) async throws -> MoveResult {
+        lastMovedAssetIDs = assetIDs
+        lastMoveSourceAlbumID = fromAlbumID
+        lastMoveTargetAlbumID = toAlbumID
+        return MoveResult(
+            movedAssetIDs: assetIDs,
+            alreadyPresentAtTargetAssetIDs: [],
+            missingFromSourceAssetIDs: []
+        )
     }
 
     private func asset(_ id: String) -> AssetDescriptor {

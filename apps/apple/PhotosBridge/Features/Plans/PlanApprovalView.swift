@@ -19,6 +19,13 @@ struct PlanApprovalView: View {
         }
         return rawURL.hasSuffix("/") ? String(rawURL.dropLast()) : rawURL
     }
+    private var operationTitle: String {
+        switch plan.operation {
+        case .albumMembersAdd: "添加到相册"
+        case .albumMembersRemove: "从相册移除"
+        case .albumMembersMove: "移动到另一相册"
+        }
+    }
     private var photoColumns: [GridItem] {
         Array(
             repeating: GridItem(.flexible(), spacing: 2),
@@ -31,9 +38,17 @@ struct PlanApprovalView: View {
             VStack(alignment: .leading, spacing: 20) {
                 GroupBox {
                     VStack(spacing: 12) {
-                        LabeledContent("相册", value: plan.targetAlbumName)
+                        LabeledContent("操作", value: operationTitle)
+                        if let sourceAlbumName = plan.sourceAlbumName {
+                            LabeledContent("源相册", value: sourceAlbumName)
+                        }
+                        if !plan.targetAlbumName.isEmpty {
+                            LabeledContent("目标相册", value: plan.targetAlbumName)
+                        }
                         LabeledContent("候选照片", value: "\(plan.assetIDs.count)")
-                        LabeledContent("相册不存在时", value: plan.createAlbumIfMissing ? "创建相册" : "停止执行")
+                        if plan.operation == .albumMembersAdd {
+                            LabeledContent("相册不存在时", value: plan.createAlbumIfMissing ? "创建相册" : "停止执行")
+                        }
                         LabeledContent("来源", value: sourceServerName)
                         LabeledContent("创建时间") { Text(plan.createdAt, style: .date) }
                         LabeledContent("计划哈希") {
@@ -71,7 +86,7 @@ struct PlanApprovalView: View {
                     }
                 }
 
-                Text("批准后只会把已有照片加入相册，不会复制、编辑或删除原始照片。")
+                Text(approvalFootnote)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -89,6 +104,17 @@ struct PlanApprovalView: View {
                 }
                 .disabled(model.isLoading || !model.authorization.canRead)
             }
+        }
+    }
+
+    private var approvalFootnote: String {
+        switch plan.operation {
+        case .albumMembersAdd:
+            "批准后只会把已有照片加入相册，不会复制、编辑或删除原始照片。"
+        case .albumMembersRemove:
+            "批准后会移除这些照片与源相册的关系，不会删除照片原件。"
+        case .albumMembersMove:
+            "批准后会在一个照片库事务中加入目标相册并移出源相册，不会删除照片原件。"
         }
     }
 }
@@ -161,6 +187,15 @@ struct PendingPlansView: View {
 private struct PendingPlanRow: View {
     let plan: WritePlan
 
+    private var albumTitle: String {
+        switch plan.operation {
+        case .albumMembersAdd: plan.targetAlbumName
+        case .albumMembersRemove: plan.sourceAlbumName ?? String(localized: "未知相册")
+        case .albumMembersMove:
+            "\(plan.sourceAlbumName ?? String(localized: "未知相册")) → \(plan.targetAlbumName)"
+        }
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
@@ -175,7 +210,7 @@ private struct PendingPlanRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(plan.targetAlbumName)
+                    Text(albumTitle)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.primary)
 

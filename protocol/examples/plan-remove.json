@@ -1,9 +1,9 @@
 {
-    "plan_id": "plan_01",
+    "plan_id": "plan_remove_01",
     "device_id": "device_01",
-    "operation": "album_members.add",
-    "summary": "Reviewed example selection",
-    "target_album": { "name": "Photos Bridge Test", "create_if_missing": true },
+    "operation": "album_members.remove",
+    "summary": "Remove reviewed photos from Source",
+    "source_album": { "id": "album_source", "name": "Source" },
     "asset_ids": ["asset_01", "asset_02"],
     "content_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
     "created_at": "2026-07-29T12:00:00Z"

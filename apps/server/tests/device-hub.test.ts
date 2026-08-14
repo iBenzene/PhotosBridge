@@ -65,6 +65,7 @@ describe("DeviceHub durable plan delivery", () => {
                 if (envelope.type !== "plans.delivery.request") return;
                 assert.equal(envelope.message_id, deliveryID);
                 assert.equal((envelope.payload as { plan_id: string }).plan_id, plan.plan_id);
+                assert.equal((envelope.payload as { operation: string }).operation, "album_members.add");
                 assert.deepEqual((envelope.payload as { asset_ids: string[] }).asset_ids, ["asset-a"]);
                 socket.send(
                     JSON.stringify({

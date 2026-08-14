@@ -86,6 +86,48 @@ struct UndoResult: Equatable, Codable, Sendable {
     var failed: Int { failedAssetIDs.count }
 }
 
+struct MoveResult: Equatable, Codable, Sendable {
+    let movedAssetIDs: [String]
+    let alreadyPresentAtTargetAssetIDs: [String]
+    let missingFromSourceAssetIDs: [String]
+
+    var requested: Int { movedAssetIDs.count + missingFromSourceAssetIDs.count }
+    var moved: Int { movedAssetIDs.count }
+    var alreadyPresentAtTarget: Int { alreadyPresentAtTargetAssetIDs.count }
+    var missingFromSource: Int { missingFromSourceAssetIDs.count }
+}
+
+struct MembershipMutationSelection: Equatable, Sendable {
+    let selectedAssetIDs: [String]
+    let additionsToTargetAssetIDs: [String]
+    let alreadyPresentAtTargetAssetIDs: [String]
+    let missingFromSourceAssetIDs: [String]
+
+    static func remove(requestedAssetIDs: [String], sourceMemberIDs: Set<String>) -> Self {
+        let requested = Array(Set(requestedAssetIDs)).sorted()
+        return Self(
+            selectedAssetIDs: requested.filter(sourceMemberIDs.contains),
+            additionsToTargetAssetIDs: [],
+            alreadyPresentAtTargetAssetIDs: [],
+            missingFromSourceAssetIDs: requested.filter { !sourceMemberIDs.contains($0) }
+        )
+    }
+
+    static func move(
+        requestedAssetIDs: [String],
+        sourceMemberIDs: Set<String>,
+        targetMemberIDs: Set<String>
+    ) -> Self {
+        let removal = remove(requestedAssetIDs: requestedAssetIDs, sourceMemberIDs: sourceMemberIDs)
+        return Self(
+            selectedAssetIDs: removal.selectedAssetIDs,
+            additionsToTargetAssetIDs: removal.selectedAssetIDs.filter { !targetMemberIDs.contains($0) },
+            alreadyPresentAtTargetAssetIDs: removal.selectedAssetIDs.filter(targetMemberIDs.contains),
+            missingFromSourceAssetIDs: removal.missingFromSourceAssetIDs
+        )
+    }
+}
+
 struct RestoreResult: Equatable, Codable, Sendable {
     let addedAssetIDs: [String]
     let alreadyPresentAssetIDs: [String]
@@ -174,6 +216,7 @@ enum PhotoLibraryFailure: Error, Equatable, LocalizedError {
     case albumNotFound
     case albumNotWritable
     case albumCreationFailed
+    case invalidAlbumMove
     case photoKit(String)
 
     var errorDescription: String? {
@@ -185,6 +228,7 @@ enum PhotoLibraryFailure: Error, Equatable, LocalizedError {
         case .albumNotFound: String(localized: "目标相册不存在，且计划不允许创建相册。")
         case .albumNotWritable: String(localized: "目标相册不可写。")
         case .albumCreationFailed: String(localized: "无法创建目标相册。")
+        case .invalidAlbumMove: String(localized: "移动照片需要两个不同且可写的现有相册。")
         case .photoKit(let message): message
         }
     }

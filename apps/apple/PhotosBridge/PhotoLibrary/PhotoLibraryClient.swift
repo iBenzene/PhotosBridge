@@ -31,4 +31,5 @@ protocol PhotoLibraryClient: AnyObject {
     func add(assetIDs: [String], toAlbumNamed albumName: String, createIfMissing: Bool) async throws -> OperationResult
     func restore(assetIDs: [String], toAlbumID albumID: String) async throws -> RestoreResult
     func remove(assetIDs: [String], fromAlbumID albumID: String) async throws -> UndoResult
+    func move(assetIDs: [String], fromAlbumID: String, toAlbumID: String) async throws -> MoveResult
 }

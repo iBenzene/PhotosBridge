@@ -147,13 +147,39 @@ final class AppModel {
         isLoading = true
         defer { isLoading = false }
         do {
-            let result = try await photoLibrary.add(
-                assetIDs: plan.assetIDs,
-                toAlbumNamed: plan.targetAlbumName,
-                createIfMissing: plan.createAlbumIfMissing
-            )
-            historyRecords.insert(HistoryRecord(result: result, undoResult: nil), at: 0)
-            if historyRecords.count > 100 { historyRecords.removeLast(historyRecords.count - 100) }
+            switch plan.operation {
+            case .albumMembersAdd:
+                let result = try await photoLibrary.add(
+                    assetIDs: plan.assetIDs,
+                    toAlbumNamed: plan.targetAlbumName,
+                    createIfMissing: plan.createAlbumIfMissing
+                )
+                historyRecords.insert(HistoryRecord(result: result, undoResult: nil), at: 0)
+                if historyRecords.count > 100 { historyRecords.removeLast(historyRecords.count - 100) }
+            case .albumMembersRemove:
+                guard let sourceAlbumID = plan.sourceAlbumID else {
+                    throw PhotoLibraryFailure.photoKit(String(localized: "移除计划缺少源相册。"))
+                }
+                let result = try await photoLibrary.remove(assetIDs: plan.assetIDs, fromAlbumID: sourceAlbumID)
+                guard result.failedAssetIDs.isEmpty else {
+                    throw PhotoLibraryFailure.photoKit(
+                        String.localizedStringWithFormat(
+                            String(localized: "%lld 张照片未能从相册移除，可稍后重试。"),
+                            Int64(result.failedAssetIDs.count)
+                        )
+                    )
+                }
+            case .albumMembersMove:
+                guard let sourceAlbumID = plan.sourceAlbumID,
+                      let targetAlbumID = plan.targetAlbumID else {
+                    throw PhotoLibraryFailure.photoKit(String(localized: "移动计划缺少源相册或目标相册。"))
+                }
+                _ = try await photoLibrary.move(
+                    assetIDs: plan.assetIDs,
+                    fromAlbumID: sourceAlbumID,
+                    toAlbumID: targetAlbumID
+                )
+            }
             pendingPlans.removeAll { $0.id == id }
             persistJournal()
             await loadAlbums()
@@ -310,9 +336,6 @@ final class AppModel {
                 guard let planID = envelope.payload["plan_id"]?.stringValue,
                       let expectedHash = envelope.payload["content_hash"]?.stringValue,
                       let summary = envelope.payload["summary"]?.stringValue,
-                      let targetAlbum = envelope.payload["target_album"],
-                      let albumName = targetAlbum["name"]?.stringValue,
-                      let createIfMissing = targetAlbum["create_if_missing"]?.boolValue,
                       let assetValues = envelope.payload["asset_ids"]?.arrayValue else {
                     throw PhotoLibraryFailure.photoKit(String(localized: "远程计划内容不完整。"))
                 }
@@ -320,18 +343,64 @@ final class AppModel {
                 guard assetIDs.count == assetValues.count else {
                     throw PhotoLibraryFailure.photoKit(String(localized: "远程计划包含无效的资源 ID。"))
                 }
-                if createIfMissing {
+                let operationValue = envelope.payload["operation"]?.stringValue
+                let operation: WritePlanOperation
+                if let operationValue {
+                    guard let parsedOperation = WritePlanOperation(rawValue: operationValue) else {
+                        throw PhotoLibraryFailure.photoKit(String(localized: "远程计划包含不支持的操作。"))
+                    }
+                    operation = parsedOperation
+                } else {
+                    operation = .albumMembersAdd
+                }
+                let sourceAlbum = envelope.payload["source_album"]
+                let sourceAlbumID = sourceAlbum?["id"]?.stringValue
+                let sourceAlbumName = sourceAlbum?["name"]?.stringValue
+                let targetAlbum = envelope.payload["target_album"]
+                let targetAlbumID = targetAlbum?["id"]?.stringValue
+                let targetAlbumName = targetAlbum?["name"]?.stringValue
+                let createIfMissing = targetAlbum?["create_if_missing"]?.boolValue ?? false
+                switch operation {
+                case .albumMembersAdd:
+                    guard sourceAlbum == nil, targetAlbumName != nil,
+                          targetAlbum?["create_if_missing"]?.boolValue != nil else {
+                        throw PhotoLibraryFailure.photoKit(String(localized: "添加计划的相册参数无效。"))
+                    }
+                case .albumMembersRemove:
+                    guard sourceAlbumID != nil, sourceAlbumName != nil, targetAlbum == nil else {
+                        throw PhotoLibraryFailure.photoKit(String(localized: "移除计划的相册参数无效。"))
+                    }
+                case .albumMembersMove:
+                    guard let sourceAlbumID, sourceAlbumName != nil,
+                          let targetAlbumID, targetAlbumName != nil,
+                          sourceAlbumID != targetAlbumID, createIfMissing == false else {
+                        throw PhotoLibraryFailure.photoKit(String(localized: "移动计划的相册参数无效。"))
+                    }
+                }
+                if operation == .albumMembersAdd && createIfMissing {
                     try requireCapability("albums.create")
                 }
-                let hashContent: JSONValue = .object([
+                var hashFields: [String: JSONValue] = [
                     "asset_ids": .array(assetIDs.map(JSONValue.string)),
                     "device_id": .string(envelope.deviceID),
-                    "summary": .string(summary),
-                    "target_album": .object([
-                        "create_if_missing": .bool(createIfMissing),
-                        "name": .string(albumName)
+                    "summary": .string(summary)
+                ]
+                if let operationValue { hashFields["operation"] = .string(operationValue) }
+                if let sourceAlbumID, let sourceAlbumName {
+                    hashFields["source_album"] = .object([
+                        "id": .string(sourceAlbumID),
+                        "name": .string(sourceAlbumName)
                     ])
-                ])
+                }
+                if let targetAlbumName {
+                    var targetFields: [String: JSONValue] = [
+                        "create_if_missing": .bool(createIfMissing),
+                        "name": .string(targetAlbumName)
+                    ]
+                    if let targetAlbumID { targetFields["id"] = .string(targetAlbumID) }
+                    hashFields["target_album"] = .object(targetFields)
+                }
+                let hashContent: JSONValue = .object(hashFields)
                 guard try hashContent.canonicalSHA256() == expectedHash else {
                     throw PhotoLibraryFailure.photoKit(String(localized: "远程计划哈希不匹配。"))
                 }
@@ -341,8 +410,12 @@ final class AppModel {
                     contentHash: expectedHash,
                     serverURL: serverConnection.server?.baseURL.absoluteString,
                     createdAt: envelope.payload["created_at"]?.stringValue.flatMap(ProtocolEnvelope.parseDate) ?? Date(),
+                    operation: operation,
                     summary: summary,
-                    targetAlbumName: albumName,
+                    sourceAlbumID: sourceAlbumID,
+                    sourceAlbumName: sourceAlbumName,
+                    targetAlbumID: targetAlbumID,
+                    targetAlbumName: targetAlbumName ?? "",
                     createAlbumIfMissing: createIfMissing,
                     assetIDs: assetIDs
                 )

@@ -67,4 +67,11 @@ final class DemoPhotoLibraryClient: PhotoLibraryClient {
     func remove(assetIDs: [String], fromAlbumID albumID: String) async throws -> UndoResult {
         UndoResult(removedAssetIDs: assetIDs, missingAssetIDs: [], failedAssetIDs: [])
     }
+    func move(assetIDs: [String], fromAlbumID: String, toAlbumID: String) async throws -> MoveResult {
+        MoveResult(
+            movedAssetIDs: assetIDs,
+            alreadyPresentAtTargetAssetIDs: [],
+            missingFromSourceAssetIDs: []
+        )
+    }
 }

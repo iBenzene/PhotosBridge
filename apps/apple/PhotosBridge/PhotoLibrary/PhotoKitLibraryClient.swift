@@ -251,13 +251,15 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
         let members = PHAsset.fetchAssets(in: album, options: nil)
         var memberByID: [String: PHAsset] = [:]
         members.enumerateObjects { asset, _, _ in memberByID[asset.localIdentifier] = asset }
-        let removable = uniqueIDs.compactMap { memberByID[$0] }
-        let removableIDs = Set(removable.map(\.localIdentifier))
-        let missingIDs = uniqueIDs.filter { !removableIDs.contains($0) }
+        let selection = MembershipMutationSelection.remove(
+            requestedAssetIDs: uniqueIDs,
+            sourceMemberIDs: Set(memberByID.keys)
+        )
+        let removable = selection.selectedAssetIDs.compactMap { memberByID[$0] }
         guard !removable.isEmpty else {
             return UndoResult(
                 removedAssetIDs: [],
-                missingAssetIDs: missingIDs, failedAssetIDs: []
+                missingAssetIDs: selection.missingFromSourceAssetIDs, failedAssetIDs: []
             )
         }
         var removedIDs: [String] = []
@@ -276,7 +278,51 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
         }
         return UndoResult(
             removedAssetIDs: removedIDs.sorted(),
-            missingAssetIDs: missingIDs, failedAssetIDs: failedIDs.sorted()
+            missingAssetIDs: selection.missingFromSourceAssetIDs, failedAssetIDs: failedIDs.sorted()
+        )
+    }
+
+    func move(assetIDs: [String], fromAlbumID: String, toAlbumID: String) async throws -> MoveResult {
+        guard authorizationLevel().canRead else { throw PhotoLibraryFailure.permissionInsufficient }
+        guard fromAlbumID != toAlbumID,
+              let source = PHAssetCollection.fetchAssetCollections(
+                withLocalIdentifiers: [fromAlbumID], options: nil
+              ).firstObject,
+              let target = PHAssetCollection.fetchAssetCollections(
+                withLocalIdentifiers: [toAlbumID], options: nil
+              ).firstObject,
+              source.canPerform(.removeContent),
+              target.canPerform(.addContent) else {
+            throw PhotoLibraryFailure.invalidAlbumMove
+        }
+
+        var sourceAssetsByID: [String: PHAsset] = [:]
+        PHAsset.fetchAssets(in: source, options: nil).enumerateObjects { asset, _, _ in
+            sourceAssetsByID[asset.localIdentifier] = asset
+        }
+        var targetMemberIDs = Set<String>()
+        PHAsset.fetchAssets(in: target, options: nil).enumerateObjects { asset, _, _ in
+            targetMemberIDs.insert(asset.localIdentifier)
+        }
+        let selection = MembershipMutationSelection.move(
+            requestedAssetIDs: assetIDs,
+            sourceMemberIDs: Set(sourceAssetsByID.keys),
+            targetMemberIDs: targetMemberIDs
+        )
+        let movedAssets = selection.selectedAssetIDs.compactMap { sourceAssetsByID[$0] }
+        let additions = selection.additionsToTargetAssetIDs.compactMap { sourceAssetsByID[$0] }
+        if !movedAssets.isEmpty {
+            try await PHPhotoLibrary.shared().performChanges {
+                if !additions.isEmpty {
+                    PHAssetCollectionChangeRequest(for: target)?.addAssets(additions as NSArray)
+                }
+                PHAssetCollectionChangeRequest(for: source)?.removeAssets(movedAssets as NSArray)
+            }
+        }
+        return MoveResult(
+            movedAssetIDs: selection.selectedAssetIDs,
+            alreadyPresentAtTargetAssetIDs: selection.alreadyPresentAtTargetAssetIDs,
+            missingFromSourceAssetIDs: selection.missingFromSourceAssetIDs
         )
     }
 

@@ -4,20 +4,16 @@
     "title": "Photos Bridge immutable write plan",
     "type": "object",
     "additionalProperties": false,
-    "required": ["plan_id", "device_id", "summary", "target_album", "asset_ids", "content_hash", "created_at"],
+    "required": ["plan_id", "device_id", "summary", "asset_ids", "content_hash", "created_at"],
     "properties": {
         "plan_id": { "type": "string", "pattern": "^plan_" },
         "device_id": { "type": "string", "pattern": "^device_" },
-        "summary": { "type": "string", "maxLength": 500 },
-        "target_album": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["name", "create_if_missing"],
-            "properties": {
-                "name": { "type": "string", "minLength": 1, "maxLength": 255 },
-                "create_if_missing": { "type": "boolean" }
-            }
+        "operation": {
+            "enum": ["album_members.add", "album_members.remove", "album_members.move"]
         },
+        "summary": { "type": "string", "maxLength": 500 },
+        "source_album": { "$ref": "#/$defs/albumReference" },
+        "target_album": { "$ref": "#/$defs/targetAlbum" },
         "asset_ids": {
             "type": "array",
             "minItems": 1,
@@ -27,5 +23,78 @@
         },
         "content_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "created_at": { "type": "string", "format": "date-time" }
+    },
+    "oneOf": [
+        {
+            "title": "Legacy add plan",
+            "properties": { "target_album": {} },
+            "required": ["target_album"],
+            "not": {
+                "anyOf": [
+                    { "properties": { "operation": {} }, "required": ["operation"] },
+                    { "properties": { "source_album": {} }, "required": ["source_album"] }
+                ]
+            }
+        },
+        {
+            "title": "Add members",
+            "properties": {
+                "operation": { "const": "album_members.add" },
+                "target_album": {}
+            },
+            "required": ["operation", "target_album"],
+            "not": { "properties": { "source_album": {} }, "required": ["source_album"] }
+        },
+        {
+            "title": "Remove members",
+            "properties": {
+                "operation": { "const": "album_members.remove" },
+                "source_album": {}
+            },
+            "required": ["operation", "source_album"],
+            "not": { "properties": { "target_album": {} }, "required": ["target_album"] }
+        },
+        {
+            "title": "Move members atomically",
+            "properties": {
+                "operation": { "const": "album_members.move" },
+                "source_album": {},
+                "target_album": {
+                    "allOf": [
+                        { "$ref": "#/$defs/targetAlbum" },
+                        {
+                            "type": "object",
+                            "required": ["id"],
+                            "properties": {
+                                "id": {},
+                                "create_if_missing": { "const": false }
+                            }
+                        }
+                    ]
+                }
+            },
+            "required": ["operation", "source_album", "target_album"]
+        }
+    ],
+    "$defs": {
+        "albumReference": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "name"],
+            "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "name": { "type": "string", "minLength": 1, "maxLength": 255 }
+            }
+        },
+        "targetAlbum": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "create_if_missing"],
+            "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+                "create_if_missing": { "type": "boolean" }
+            }
+        }
     }
 }

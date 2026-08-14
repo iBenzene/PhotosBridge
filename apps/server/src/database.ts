@@ -28,10 +28,21 @@ export class PhotosBridgeDatabase {
         this.connection.pragma("foreign_keys = ON");
         this.connection.pragma("busy_timeout = 5000");
         this.connection.exec(fs.readFileSync(migrationPath, "utf8"));
+        this.ensurePlanOperationColumns();
     }
 
     close(): void {
         this.connection.close();
+    }
+
+    private ensurePlanOperationColumns(): void {
+        const columns = new Set(
+            (this.connection.pragma("table_info(plans)") as Array<{ name: string }>).map(column => column.name)
+        );
+        if (!columns.has("operation")) this.connection.exec("ALTER TABLE plans ADD COLUMN operation TEXT");
+        if (!columns.has("source_album_json")) {
+            this.connection.exec("ALTER TABLE plans ADD COLUMN source_album_json TEXT");
+        }
     }
 
     seedAdminKey(key: string): void {
@@ -55,12 +66,7 @@ export class PhotosBridgeDatabase {
       VALUES (?, ?, ?, ?)
     `
             )
-            .run(
-                id("key"),
-                "bootstrap-admin",
-                keyHash,
-                scopes
-            );
+            .run(id("key"), "bootstrap-admin", keyHash, scopes);
     }
 
     createAPIKey(name: string, scopes: string[]): { id: string; key: string; scopes: string[] } {
