@@ -1,6 +1,6 @@
 # Photos Bridge Protocol
 
-Status: Draft (Protocol v1.1 profile)
+Status: Draft (Protocol v1 profile)
 Transport protocol version: 1
 
 Photos Bridge Protocol is vendor-neutral. PhotoKit local identifiers are opaque
@@ -82,7 +82,7 @@ object keys, compact separators, UTF-8 encoding, and stable array order. Asset
 IDs are deduplicated and sorted before hashing. The device reconstructs and
 verifies the same canonical content before presenting approval.
 
-Write plans created by the v1.1 profile include an explicit `operation` field:
+Write plans created by the v1 profile include an explicit `operation` field:
 
 - `album_members.add` requires `target_album` and may create it.
 - `album_members.remove` requires an existing `source_album` identified by its

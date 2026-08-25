@@ -11,6 +11,15 @@ import UIKit
 @testable import PhotosBridge
 
 struct PhotosBridgeTests {
+    @Test func appTransportSecurityAllowsPrivateIPAddressServers() throws {
+        let ats = try #require(
+            Bundle.main.object(forInfoDictionaryKey: "NSAppTransportSecurity") as? [String: Any]
+        )
+
+        #expect(ats["NSAllowsArbitraryLoads"] as? Bool == true)
+        #expect(ats["NSAllowsLocalNetworking"] == nil)
+    }
+
     @Test func writePlanDeduplicatesAndSortsAssets() {
         let plan = WritePlan(
             id: "plan_1", contentHash: String(repeating: "a", count: 64), serverURL: nil,

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- The paired server is addressed by a private-network IP (for example,
+		     http://192.168.1.10:8787). ATS exception domains cannot target IP
+		     addresses, so URLSession requires this exception for the app's
+		     user-selected local HTTP and WebSocket endpoint. Do not add
+		     NSAllowsLocalNetworking here: on iOS 10 and later its presence makes
+		     the system ignore NSAllowsArbitraryLoads. -->
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

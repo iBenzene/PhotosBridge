@@ -35,13 +35,14 @@ final class ServerConnection {
 
     func pair(baseURL: URL, token: String, displayName: String, capabilities: [String]) async throws -> (PairedServer, String) {
         let endpoint = baseURL.appending(path: "/device/v1/pair")
+        let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: [
             "pairing_token": token,
             "display_name": displayName,
-            "app_version": "0.1.0",
+            "app_version": appVersion,
             "protocol_version": 1,
             "capabilities": capabilities,
         ])
