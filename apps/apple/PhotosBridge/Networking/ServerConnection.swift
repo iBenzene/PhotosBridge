@@ -70,9 +70,8 @@ final class ServerConnection {
         request.setValue("Bearer \(activeSecret)", forHTTPHeaderField: "Authorization")
         request.httpBody = try? JSONSerialization.data(withJSONObject: ["device_id": server.deviceID])
 
-        // Local unpairing must not depend on a reachable server. In particular, a
-        // connection attempt can otherwise leave this request waiting while the UI
-        // continues to show the device as paired.
+        // 本地解除配对逻辑不可强依赖服务端的可达性。
+        // 若先等待网络请求返回, 网络阻塞可能导致界面长时间卡滞在「已配对」状态。
         disconnect(markUnpaired: true)
         _ = try? await URLSession.shared.data(for: request)
     }

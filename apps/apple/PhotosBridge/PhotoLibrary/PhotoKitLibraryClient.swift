@@ -182,9 +182,8 @@ final class PhotoKitLibraryClient: NSObject, PhotoLibraryClient, PHPhotoLibraryC
                 try await add(batch, to: album)
                 addedIDs.append(contentsOf: batch.map(\.localIdentifier))
             } catch {
-                // PhotoKit reports a transaction-level error. Retry each asset
-                // only after the failed transaction, so the result identifies
-                // exact failures without duplicating successful membership.
+                // PhotoKit 抛出的是事务级错误。批量添加失败后进行单项重试,
+                // 以便精准定位失败的资源 ID, 且避免重复写入已成功的成员。
                 for asset in batch {
                     do { try await add([asset], to: album); addedIDs.append(asset.localIdentifier) }
                     catch { failedIDs.append(asset.localIdentifier) }

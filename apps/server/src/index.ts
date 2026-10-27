@@ -30,7 +30,7 @@ const startServer = async (): Promise<void> => {
         console.log(`🔑 Admin Key:  ${config.adminKey}`);
         console.log(`--------------------------------------------------------------------`);
 
-        // Automatically create a pairing session (valid for 24 hours)
+        // 服务启动时自动创建一个有效期为 24 小时 (86400 秒) 的设备配对会话。
         const session = database.createPairingSession(86400);
 
         const qrPayload = {

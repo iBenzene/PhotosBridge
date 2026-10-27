@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { prepareEnvironment } from "./auto-config.js";
 
 const startDevelopmentServer = async (): Promise<void> => {
-    // tsx watch uses stdin for its own restart shortcut. Complete all prompts
-    // before it starts so both processes never compete for the same input.
+    // 「tsx watch」依赖标准输入捕获快捷键以触发重启。
+    // 在子进程启动前完成所有的交互式配置提示, 避免主子进程竞争标准输入。
     await prepareEnvironment();
 
     const tsxCli = fileURLToPath(import.meta.resolve("tsx/cli"));

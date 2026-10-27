@@ -101,6 +101,9 @@ export class PhotosBridgeDatabase {
         return row ? { scopes: JSON.parse(row.scopes_json) as string[] } : null;
     }
 
+    /**
+     * 生成单次有效的设备配对会话令牌, 并设定过期时间。
+     */
     createPairingSession(ttlSeconds = 300): { token: string; expiresAt: string } {
         const token = `pbp_${crypto.randomBytes(32).toString("base64url")}`;
         const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
@@ -115,6 +118,9 @@ export class PhotosBridgeDatabase {
         return { expiresAt, token };
     }
 
+    /**
+     * 校验配对令牌的有效性并完成设备配对注册, 令牌使用后立即核销。
+     */
     pairDevice(input: {
         token: string;
         displayName: string;

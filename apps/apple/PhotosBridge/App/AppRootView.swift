@@ -85,9 +85,8 @@ struct AppRootView: View {
     }
 }
 
-/// SwiftUI caches the `UITabBarItem` created from `.tabItem`, so changing the
-/// label's system image with the selection does not update its selected image.
-/// Configure both UIKit image states once and let `UITabBar` switch between them.
+/// SwiftUI 会缓存由「.tabItem」生成的「UITabBarItem」实例, 仅在视图层随选中状态切换系统图标不会触发 UIKit 选中态图标的刷新。
+/// 此处在 UIKit 层直接统一配置正常态与选中态图标, 由底层的「UITabBar」自动处理切换交互。
 private struct TabBarIconConfigurator: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> TabBarIconConfiguratorViewController {
         TabBarIconConfiguratorViewController()

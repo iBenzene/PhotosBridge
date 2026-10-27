@@ -20,8 +20,7 @@ const getLocalIPv4Addresses = (): string[] => {
 export const prepareEnvironment = async (): Promise<void> => {
     const isProduction = process.env.NODE_ENV === "production";
 
-    // Auto-generate the admin key once in the parent process so it remains
-    // stable when the development file watcher restarts the server process.
+    // 在父进程中生成一次管理密钥, 防止开发模式下的文件监听重启导致客户端密钥频繁失效。
     if (!process.env.PHOTOS_BRIDGE_ADMIN_KEY) {
         const autoKey = crypto.randomBytes(16).toString("hex");
         process.env.PHOTOS_BRIDGE_ADMIN_KEY = autoKey;
@@ -65,7 +64,7 @@ export const prepareEnvironment = async (): Promise<void> => {
                 selectedIP = availableIPs[choice - 1];
             }
         } catch {
-            // Use the recommended address when interactive input is interrupted.
+            // 当交互式输入被中断时, 直接回退并使用推荐的首选局域网地址。
         } finally {
             rl.close();
         }

@@ -15,6 +15,8 @@ ThumbnailContentMode = Literal["fit", "fill"]
 
 
 class BridgeError(RuntimeError):
+    """请求 Photos Bridge 服务端时产生的通用桥接异常。"""
+
     def __init__(
         self, code: str, status: int | None = None, details: object = None
     ) -> None:
@@ -25,6 +27,11 @@ class BridgeError(RuntimeError):
 
 
 class BridgeClient:
+    """与 Photos Bridge 服务端进行通信的客户端工具。
+
+    负责获取远端设备上的相册列表、分页同步照片元数据以及拉取缩略图数据。
+    """
+
     def __init__(self, base_url: str, api_key: str, timeout: float = 30.0) -> None:
         if not base_url.strip() or not api_key.strip():
             raise ValueError("base_url and api_key are required")
@@ -33,10 +40,12 @@ class BridgeClient:
         self.timeout = timeout
 
     def list_albums(self, device_id: str) -> tuple[Album, ...]:
+        """获取指定设备上的全部相册元数据列表。"""
         payload = self._get_json(f"/api/v1/devices/{self._segment(device_id)}/albums")
         return tuple(Album.from_payload(item) for item in payload.get("albums", []))
 
     def list_album_assets(self, device_id: str, album_id: str) -> tuple[str, ...]:
+        """获取指定相册内包含的所有照片资源标识列表。"""
         payload = self._get_json(
             f"/api/v1/devices/{self._segment(device_id)}/albums/{self._segment(album_id)}/assets"
         )
@@ -50,6 +59,7 @@ class BridgeClient:
         cursor: str | None = None,
         limit: int = 500,
     ) -> AssetPage:
+        """分页获取指定设备的相册资源快照。"""
         if not 1 <= limit <= 500:
             raise ValueError("limit must be between 1 and 500")
         query = {"limit": str(limit)}
@@ -61,6 +71,7 @@ class BridgeClient:
         return AssetPage.from_payload(self._get_json(path))
 
     def iter_assets(self, device_id: str, *, limit: int = 500) -> Iterator[AssetPage]:
+        """使用游标自动迭代遍历指定设备上的所有照片分页。"""
         snapshot_id: str | None = None
         cursor: str | None = None
         while True:
@@ -81,6 +92,7 @@ class BridgeClient:
         max_dimension: int = 518,
         content_mode: ThumbnailContentMode = "fit",
     ) -> tuple[bytes, str]:
+        """获取指定照片资产的缩略图图片二进制数据以及媒体类型。"""
         if not 1 <= max_dimension <= 1024:
             raise ValueError("max_dimension must be between 1 and 1024")
         if content_mode not in ("fit", "fill"):
