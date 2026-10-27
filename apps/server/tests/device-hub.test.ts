@@ -62,7 +62,9 @@ describe("DeviceHub durable plan delivery", () => {
             socket.on("error", reject);
             socket.on("message", async raw => {
                 const envelope = JSON.parse(raw.toString()) as ProtocolEnvelope;
-                if (envelope.type !== "plans.delivery.request") return;
+                if (envelope.type !== "plans.delivery.request") {
+                    return;
+                }
                 assert.equal(envelope.message_id, deliveryID);
                 assert.equal((envelope.payload as { plan_id: string }).plan_id, plan.plan_id);
                 assert.equal((envelope.payload as { operation: string }).operation, "album_members.add");

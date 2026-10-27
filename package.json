@@ -7,8 +7,7 @@
     ],
     "scripts": {
         "build:server": "npm --workspace @photos-bridge/server run build",
-        "generate:app-icon": "node scripts/generate-app-icon.mjs",
-        "test:retriever": "python -m pytest --rootdir apps/retriever apps/retriever/tests",
+        "test:toolkit": "python -m pytest --rootdir apps/toolkit apps/toolkit/tests",
         "test:server": "npm --workspace @photos-bridge/server test",
         "dev:server": "npm --workspace @photos-bridge/server run dev",
         "lint": "eslint . --ext .ts,.js,.json,.cjs",
@@ -25,6 +24,7 @@
         "eslint-plugin-prettier": "^5.5.4",
         "eslint-plugin-sort-keys-fix": "^1.1.2",
         "jsonc-eslint-parser": "^2.4.0",
-        "prettier": "^3.7.4"
+        "prettier": "^3.7.4",
+        "typescript": "5.9.3"
     }
 }

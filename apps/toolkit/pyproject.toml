@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "photos-bridge-retriever"
+name = "photos-bridge-toolkit"
 version = "0.1.0"
 description = "Minimal local retrieval primitives for Photos Bridge workflows."
 readme = "README.md"

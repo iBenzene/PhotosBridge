@@ -1,15 +1,11 @@
-"""
-@file test_search.py
-@description Tests for model-agnostic vector, perceptual-hash, and temporal search primitives.
-@author iBenzene
-"""
+# tests/test_search.py
 
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pytest
 
-from photos_bridge_retriever import (
+from photos_bridge_toolkit import (
     Asset,
     Embedding,
     cosine_search,

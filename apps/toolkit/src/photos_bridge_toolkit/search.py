@@ -1,8 +1,4 @@
-"""
-@file search.py
-@description Model-agnostic vector, perceptual-hash, and temporal retrieval primitives.
-@author iBenzene
-"""
+# src/photos_bridge_toolkit/search.py
 
 from __future__ import annotations
 

@@ -1,4 +1,12 @@
+# OS System Files
 .DS_Store
+[Dd]esktop.ini
+Thumbs.db
+$RECYCLE.BIN/
+
+# IDE & Editor
+.vscode/
+.idea/
 
 # Xcode
 DerivedData/

@@ -1,5 +1,6 @@
 # Build outputs and dependencies
 node_modules
+.mypy_cache/
 dist
 build
 apps/*/dist

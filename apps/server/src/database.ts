@@ -1,8 +1,5 @@
-/**
- * @file database.ts
- * @description SQLite database management, schema migrations, and persistence layer.
- * @author iBenzene
- */
+// src/database.ts
+
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -22,7 +19,9 @@ export class PhotosBridgeDatabase {
     readonly connection: Database.Database;
 
     constructor(databasePath: string, migrationPath = path.resolve("migrations/001_initial.sql")) {
-        if (databasePath !== ":memory:") fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+        if (databasePath !== ":memory:") {
+            fs.mkdirSync(path.dirname(databasePath), { recursive: true });
+        }
         this.connection = new Database(databasePath);
         this.connection.pragma("journal_mode = WAL");
         this.connection.pragma("foreign_keys = ON");
@@ -39,7 +38,9 @@ export class PhotosBridgeDatabase {
         const columns = new Set(
             (this.connection.pragma("table_info(plans)") as Array<{ name: string }>).map(column => column.name)
         );
-        if (!columns.has("operation")) this.connection.exec("ALTER TABLE plans ADD COLUMN operation TEXT");
+        if (!columns.has("operation")) {
+            this.connection.exec("ALTER TABLE plans ADD COLUMN operation TEXT");
+        }
         if (!columns.has("source_album_json")) {
             this.connection.exec("ALTER TABLE plans ADD COLUMN source_album_json TEXT");
         }
@@ -72,7 +73,9 @@ export class PhotosBridgeDatabase {
     createAPIKey(name: string, scopes: string[]): { id: string; key: string; scopes: string[] } {
         const allowed = new Set(["admin", "library.read", "plans.write"]);
         const normalizedScopes = [...new Set(scopes)].filter(scope => allowed.has(scope)).sort();
-        if (!name.trim() || normalizedScopes.length === 0) throw new Error("INVALID_API_KEY");
+        if (!name.trim() || normalizedScopes.length === 0) {
+            throw new Error("INVALID_API_KEY");
+        }
         const keyID = id("key");
         const key = `pbk_${crypto.randomBytes(32).toString("base64url")}`;
         this.connection
@@ -122,10 +125,18 @@ export class PhotosBridgeDatabase {
         const session = this.connection
             .prepare("SELECT expires_at, consumed FROM pairing_sessions WHERE token_hash = ?")
             .get(hashSecret(input.token)) as { expires_at: string; consumed: number } | undefined;
-        if (!session) throw new PairingError("PAIRING_INVALID", 404);
-        if (session.consumed) throw new PairingError("PAIRING_ALREADY_USED", 409);
-        if (new Date(session.expires_at).getTime() <= Date.now()) throw new PairingError("PAIRING_EXPIRED", 410);
-        if (input.protocolVersion !== 1) throw new PairingError("PROTOCOL_VERSION_UNSUPPORTED", 400);
+        if (!session) {
+            throw new PairingError("PAIRING_INVALID", 404);
+        }
+        if (session.consumed) {
+            throw new PairingError("PAIRING_ALREADY_USED", 409);
+        }
+        if (new Date(session.expires_at).getTime() <= Date.now()) {
+            throw new PairingError("PAIRING_EXPIRED", 410);
+        }
+        if (input.protocolVersion !== 1) {
+            throw new PairingError("PROTOCOL_VERSION_UNSUPPORTED", 400);
+        }
         const capabilities = [...new Set(input.capabilities)].sort();
         if (capabilities.some(capability => !DEVICE_CAPABILITIES.has(capability))) {
             throw new PairingError("CAPABILITY_UNSUPPORTED", 400);

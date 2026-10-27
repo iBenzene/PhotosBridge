@@ -1,8 +1,4 @@
-"""
-@file __init__.py
-@description Public retrieval primitives exposed to private Photos Bridge workflows.
-@author iBenzene
-"""
+# src/photos_bridge_toolkit/__init__.py
 
 from .bridge import BridgeClient, BridgeError
 from .models import (
@@ -16,7 +12,7 @@ from .models import (
 )
 from .paths import default_data_directory
 from .search import cosine_search, perceptual_hash_search, temporal_neighbors
-from .store import RetrieverStore
+from .store import ToolkitStore
 
 __all__ = [
     "Album",
@@ -26,7 +22,7 @@ __all__ = [
     "BridgeError",
     "Embedding",
     "HashMatch",
-    "RetrieverStore",
+    "ToolkitStore",
     "TemporalMatch",
     "VectorMatch",
     "cosine_search",

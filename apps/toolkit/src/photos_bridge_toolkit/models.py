@@ -1,8 +1,4 @@
-"""
-@file models.py
-@description Immutable protocol and retrieval data structures shared by the retriever modules.
-@author iBenzene
-"""
+# src/photos_bridge_toolkit/models.py
 
 from __future__ import annotations
 

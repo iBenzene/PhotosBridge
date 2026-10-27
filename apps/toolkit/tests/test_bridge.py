@@ -1,8 +1,4 @@
-"""
-@file test_bridge.py
-@description Tests for the retriever's read-only Photos Bridge HTTP client.
-@author iBenzene
-"""
+# tests/test_bridge.py
 
 from __future__ import annotations
 
@@ -11,7 +7,7 @@ from urllib.request import Request
 
 import pytest
 
-from photos_bridge_retriever import BridgeClient
+from photos_bridge_toolkit import BridgeClient
 
 
 class StubBridgeClient(BridgeClient):

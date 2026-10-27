@@ -1,8 +1,4 @@
-"""
-@file store.py
-@description Retriever-owned SQLite catalog and content-addressed local object storage.
-@author iBenzene
-"""
+# src/photos_bridge_toolkit/store.py
 
 from __future__ import annotations
 
@@ -22,7 +18,7 @@ from .paths import default_data_directory
 SCHEMA_VERSION = 1
 
 
-class RetrieverStore:
+class ToolkitStore:
     def __init__(self, root: str | Path | None = None) -> None:
         self.root = (
             Path(root).resolve() if root is not None else default_data_directory()
@@ -41,7 +37,7 @@ class RetrieverStore:
     def close(self) -> None:
         self.connection.close()
 
-    def __enter__(self) -> RetrieverStore:
+    def __enter__(self) -> ToolkitStore:
         return self
 
     def __exit__(self, _type: object, _value: object, _traceback: object) -> None:

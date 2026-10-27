@@ -1,8 +1,5 @@
-/**
- * @file app.ts
- * @description Express application setup, middleware configuration, and core API routing.
- * @author iBenzene
- */
+// src/app.ts
+
 import express, { type NextFunction, type Request, type Response } from "express";
 import type { ServerConfig } from "./config.js";
 import { PairingError, PhotosBridgeDatabase } from "./database.js";
@@ -109,13 +106,17 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
     app.get("/api/v1/devices/:deviceID", requireScope(database, "library.read"), (request, response) => {
         const deviceID = String(request.params.deviceID);
         const device = database.getDevice(deviceID);
-        if (!device) return response.status(404).json({ error: { code: "DEVICE_NOT_FOUND" } });
+        if (!device) {
+            return response.status(404).json({ error: { code: "DEVICE_NOT_FOUND" } });
+        }
         return response.json(presentDevice(device, hub.isOnline(device.id)));
     });
 
     app.delete("/api/v1/devices/:deviceID", requireScope(database, "admin"), (request, response) => {
         const deviceID = String(request.params.deviceID);
-        if (!database.revokeDevice(deviceID)) return response.status(404).json({ error: { code: "DEVICE_NOT_FOUND" } });
+        if (!database.revokeDevice(deviceID)) {
+            return response.status(404).json({ error: { code: "DEVICE_NOT_FOUND" } });
+        }
         hub.disconnect(deviceID);
         return response.status(204).send();
     });
@@ -159,8 +160,9 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
                     content_mode: contentMode,
                     max_dimension: Math.min(Number(request.query.max_dimension ?? 768), 1024),
                 })) as { data_base64?: string; mime_type?: string };
-                if (!payload.data_base64)
+                if (!payload.data_base64) {
                     return void response.status(502).json({ error: { code: "THUMBNAIL_GENERATION_FAILED" } });
+                }
                 response.type(payload.mime_type ?? "image/jpeg").send(Buffer.from(payload.data_base64, "base64"));
             } catch (error) {
                 next(error);
@@ -177,14 +179,18 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
     });
     app.get("/api/v1/plans/:planID", requireScope(database, "plans.write"), (request, response) => {
         const plan = plans.get(String(request.params.planID));
-        if (!plan) return response.status(404).json({ error: { code: "PLAN_NOT_FOUND" } });
+        if (!plan) {
+            return response.status(404).json({ error: { code: "PLAN_NOT_FOUND" } });
+        }
         return response.json(plan);
     });
     app.post("/api/v1/plans/:planID/deliver", requireScope(database, "plans.write"), (request, response, next) => {
         try {
             const planID = String(request.params.planID);
             const plan = plans.get(planID);
-            if (!plan) throw new PlanError("PLAN_NOT_FOUND", 404);
+            if (!plan) {
+                throw new PlanError("PLAN_NOT_FOUND", 404);
+            }
             const deliveryExpiresAt = new Date(Date.now() + DEFAULT_DELIVERY_TTL_MS).toISOString();
             response.status(202).json(hub.enqueuePlanDelivery(planID, deliveryExpiresAt));
         } catch (error) {
@@ -193,17 +199,28 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
     });
     app.get("/api/v1/plans/:planID/delivery", requireScope(database, "plans.write"), (request, response) => {
         const delivery = hub.getLatestPlanDelivery(String(request.params.planID));
-        if (!delivery) return response.status(404).json({ error: { code: "DELIVERY_NOT_FOUND" } });
+        if (!delivery) {
+            return response.status(404).json({ error: { code: "DELIVERY_NOT_FOUND" } });
+        }
         return response.json(delivery);
     });
     app.use((_request, response) => response.status(404).json({ error: { code: "NOT_FOUND" } }));
     app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
-        if (error instanceof PairingError) return response.status(error.status).json({ error: { code: error.code } });
-        if (error instanceof PlanError) return response.status(error.status).json({ error: { code: error.code } });
-        if (error instanceof DeviceOfflineError) return response.status(503).json({ error: { code: error.code } });
-        if (error instanceof DeviceTimeoutError) return response.status(504).json({ error: { code: error.code } });
-        if (error instanceof DeviceResponseError)
+        if (error instanceof PairingError) {
+            return response.status(error.status).json({ error: { code: error.code } });
+        }
+        if (error instanceof PlanError) {
+            return response.status(error.status).json({ error: { code: error.code } });
+        }
+        if (error instanceof DeviceOfflineError) {
+            return response.status(503).json({ error: { code: error.code } });
+        }
+        if (error instanceof DeviceTimeoutError) {
+            return response.status(504).json({ error: { code: error.code } });
+        }
+        if (error instanceof DeviceResponseError) {
             return response.status(502).json({ error: { code: error.code, details: error.payload } });
+        }
         console.error("Unhandled request error", error);
         return response.status(500).json({ error: { code: "INTERNAL_ERROR" } });
     });
@@ -211,7 +228,9 @@ export const createApp = ({ config, database, hub }: AppDependencies): express.E
 };
 
 const parseThumbnailContentMode = (value: unknown): "fit" | "fill" | undefined => {
-    if (value === undefined) return "fill";
+    if (value === undefined) {
+        return "fill";
+    }
     return value === "fit" || value === "fill" ? value : undefined;
 };
 
@@ -221,7 +240,9 @@ const requireScope =
         const authorization = request.header("Authorization");
         const key = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
         const principal = key ? database.authenticateAPIKey(key) : null;
-        if (!principal) return void response.status(401).json({ error: { code: "AUTHENTICATION_FAILED" } });
+        if (!principal) {
+            return void response.status(401).json({ error: { code: "AUTHENTICATION_FAILED" } });
+        }
         if (!principal.scopes.includes("admin") && !principal.scopes.includes(scope)) {
             return void response.status(403).json({ error: { code: "CAPABILITY_NOT_GRANTED" } });
         }
@@ -247,7 +268,9 @@ const requireDeviceCapability =
     (database: PhotosBridgeDatabase, capability: string) =>
     (request: Request, response: Response, next: NextFunction): void => {
         const device = database.getDevice(String(request.params.deviceID));
-        if (!device) return void response.status(404).json({ error: { code: "DEVICE_NOT_FOUND" } });
+        if (!device) {
+            return void response.status(404).json({ error: { code: "DEVICE_NOT_FOUND" } });
+        }
         const capabilities = JSON.parse(device.capabilities_json) as string[];
         if (!capabilities.includes(capability)) {
             return void response.status(403).json({ error: { capability, code: "CAPABILITY_NOT_GRANTED" } });
@@ -259,7 +282,9 @@ const presentDevice = (
     device: ReturnType<PhotosBridgeDatabase["getDevice"]> & NonNullable<unknown>,
     online: boolean
 ) => {
-    if (!device) return device;
+    if (!device) {
+        return device;
+    }
     return {
         app_version: device.app_version,
         capabilities: JSON.parse(device.capabilities_json) as string[],

@@ -1,8 +1,5 @@
-/**
- * @file config.ts
- * @description Server configuration parser and environment settings loader.
- * @author iBenzene
- */
+// src/config.ts
+
 import path from "node:path";
 
 export type ServerConfig = {

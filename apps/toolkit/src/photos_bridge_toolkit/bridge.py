@@ -1,8 +1,4 @@
-"""
-@file bridge.py
-@description Read-only HTTP client for the public Photos Bridge Server library endpoints.
-@author iBenzene
-"""
+# src/photos_bridge_toolkit/bridge.py
 
 from __future__ import annotations
 

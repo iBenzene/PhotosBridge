@@ -1,8 +1,5 @@
-/**
- * @file device-hub.ts
- * @description WebSocket connection hub for device pairing and real-time message routing.
- * @author iBenzene
- */
+// src/device-hub.ts
+
 import type { IncomingMessage, Server } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import type { PhotosBridgeDatabase } from "./database.js";
@@ -43,10 +40,14 @@ export class DeviceHub {
     attach(server: Server): void {
         server.on("upgrade", (request, socket, head) => {
             const url = new URL(request.url ?? "/", "http://localhost");
-            if (url.pathname !== "/device/v1/connect") return socket.destroy();
+            if (url.pathname !== "/device/v1/connect") {
+                return socket.destroy();
+            }
             const deviceID = url.searchParams.get("device_id") ?? "";
             const secret = bearer(request);
-            if (!deviceID || !secret || !this.database.authenticateDevice(deviceID, secret)) return socket.destroy();
+            if (!deviceID || !secret || !this.database.authenticateDevice(deviceID, secret)) {
+                return socket.destroy();
+            }
             this.websocketServer.handleUpgrade(request, socket, head, websocket => {
                 this.accept(deviceID, websocket);
             });
@@ -64,7 +65,9 @@ export class DeviceHub {
 
     async request(deviceID: string, type: string, payload: unknown, timeoutMilliseconds = 15_000): Promise<unknown> {
         const socket = this.sockets.get(deviceID);
-        if (!socket || socket.readyState !== WebSocket.OPEN) throw new DeviceOfflineError();
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            throw new DeviceOfflineError();
+        }
         const messageID = id("msg");
         const envelope: ProtocolEnvelope = {
             correlation_id: null,
@@ -89,7 +92,9 @@ export class DeviceHub {
     enqueuePlanDelivery(planID: string, deliveryExpiresAt: string): PlanDelivery {
         const plan = this.database.connection.prepare("SELECT device_id FROM plans WHERE id = ?").get(planID) as
             { device_id: string } | undefined;
-        if (!plan) throw new Error("PLAN_NOT_FOUND");
+        if (!plan) {
+            throw new Error("PLAN_NOT_FOUND");
+        }
         const existing = this.database.connection
             .prepare(
                 `
@@ -99,7 +104,9 @@ export class DeviceHub {
     `
             )
             .get(planID) as { id: string } | undefined;
-        if (existing) return this.getLatestPlanDelivery(planID)!;
+        if (existing) {
+            return this.getLatestPlanDelivery(planID)!;
+        }
         const deliveryID = id("delivery");
         const timestamp = new Date().toISOString();
         this.database.connection
@@ -129,7 +136,9 @@ export class DeviceHub {
         socket.on("pong", () => this.database.touchDevice(deviceID));
         socket.on("message", data => this.receive(deviceID, data.toString()));
         socket.on("close", () => {
-            if (this.sockets.get(deviceID) === socket) this.sockets.delete(deviceID);
+            if (this.sockets.get(deviceID) === socket) {
+                this.sockets.delete(deviceID);
+            }
         });
         socket.send(
             JSON.stringify({
@@ -152,9 +161,13 @@ export class DeviceHub {
         } catch {
             return;
         }
-        if (envelope.protocol_version !== 1 || envelope.device_id !== deviceID) return;
+        if (envelope.protocol_version !== 1 || envelope.device_id !== deviceID) {
+            return;
+        }
         this.database.touchDevice(deviceID);
-        if (!envelope.correlation_id) return;
+        if (!envelope.correlation_id) {
+            return;
+        }
         const delivery = this.database.connection
             .prepare(
                 `SELECT pd.id, pd.plan_id FROM plan_deliveries pd
@@ -179,16 +192,23 @@ export class DeviceHub {
             }
         }
         const pending = this.pending.get(envelope.correlation_id);
-        if (!pending) return;
+        if (!pending) {
+            return;
+        }
         clearTimeout(pending.timer);
         this.pending.delete(envelope.correlation_id);
-        if (envelope.type.endsWith(".error")) pending.reject(new DeviceResponseError(envelope.payload));
-        else pending.resolve(envelope.payload);
+        if (envelope.type.endsWith(".error")) {
+            pending.reject(new DeviceResponseError(envelope.payload));
+        } else {
+            pending.resolve(envelope.payload);
+        }
     }
 
     private deliverQueued(deviceID: string): void {
         const socket = this.sockets.get(deviceID);
-        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            return;
+        }
         const deliveries = this.database.connection
             .prepare(
                 `

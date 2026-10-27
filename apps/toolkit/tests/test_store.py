@@ -1,8 +1,4 @@
-"""
-@file test_store.py
-@description Tests for the retriever's local catalog, object cache, embeddings, and hashes.
-@author iBenzene
-"""
+# tests/test_store.py
 
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,11 +6,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from photos_bridge_retriever import Asset, RetrieverStore
+from photos_bridge_toolkit import Asset, ToolkitStore
 
 
 def test_persists_assets_and_replaces_album_membership(tmp_path: Path) -> None:
-    with RetrieverStore(tmp_path) as store:
+    with ToolkitStore(tmp_path) as store:
         assert store.upsert_assets("device", [asset("asset-1"), asset("asset-2")]) == 2
         store.replace_album_assets("device", "album", ["asset-2", "asset-1", "asset-2"])
         store.replace_album_assets("device", "album", ["asset-2"])
@@ -27,7 +23,7 @@ def test_persists_assets_and_replaces_album_membership(tmp_path: Path) -> None:
 
 
 def test_content_addressed_thumbnail_cache_deduplicates_bytes(tmp_path: Path) -> None:
-    with RetrieverStore(tmp_path) as store:
+    with ToolkitStore(tmp_path) as store:
         store.upsert_assets("device", [asset("asset-1"), asset("asset-2")])
 
         first = store.store_thumbnail("device", "asset-1", b"same-jpeg", "image/jpeg")
@@ -45,12 +41,12 @@ def test_content_addressed_thumbnail_cache_deduplicates_bytes(tmp_path: Path) ->
 
 
 def test_thumbnail_requires_catalogued_asset(tmp_path: Path) -> None:
-    with RetrieverStore(tmp_path) as store, pytest.raises(KeyError):
+    with ToolkitStore(tmp_path) as store, pytest.raises(KeyError):
         store.store_thumbnail("device", "missing", b"jpeg", "image/jpeg")
 
 
 def test_prunes_missing_assets_and_their_derived_features(tmp_path: Path) -> None:
-    with RetrieverStore(tmp_path) as store:
+    with ToolkitStore(tmp_path) as store:
         store.upsert_assets("device", [asset("keep"), asset("remove")])
         store.replace_album_assets("device", "album", ["keep", "remove"])
         store.put_embedding("device", "model", "remove", np.array([1.0, 0.0]))
@@ -65,7 +61,7 @@ def test_prunes_missing_assets_and_their_derived_features(tmp_path: Path) -> Non
 
 
 def test_embeddings_are_normalized_versioned_and_round_trip(tmp_path: Path) -> None:
-    with RetrieverStore(tmp_path) as store:
+    with ToolkitStore(tmp_path) as store:
         store.put_embedding(
             "device", "model-a", "asset", np.array([3.0, 4.0], dtype=np.float32)
         )
@@ -84,7 +80,7 @@ def test_embeddings_are_normalized_versioned_and_round_trip(tmp_path: Path) -> N
 
 
 def test_embeddings_support_batch_writes(tmp_path: Path) -> None:
-    with RetrieverStore(tmp_path) as store:
+    with ToolkitStore(tmp_path) as store:
         assert (
             store.put_embeddings(
                 "device",
@@ -105,7 +101,7 @@ def test_embeddings_support_batch_writes(tmp_path: Path) -> None:
 
 
 def test_perceptual_hashes_are_algorithm_scoped(tmp_path: Path) -> None:
-    with RetrieverStore(tmp_path) as store:
+    with ToolkitStore(tmp_path) as store:
         store.put_hash("device", "phash-64", "asset", 0xFF, 64)
         store.put_hash("device", "dhash-64", "asset", 0xAA, 64)
 
@@ -114,7 +110,7 @@ def test_perceptual_hashes_are_algorithm_scoped(tmp_path: Path) -> None:
 
 
 def test_perceptual_hashes_support_batch_writes(tmp_path: Path) -> None:
-    with RetrieverStore(tmp_path) as store:
+    with ToolkitStore(tmp_path) as store:
         assert (
             store.put_hashes(
                 "device", "phash-64", [("asset-1", 0xFF), ("asset-2", 0xAA)], 64

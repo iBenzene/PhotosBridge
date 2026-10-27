@@ -1,4 +1,4 @@
-# 照片桥（Photos Bridge）
+# 照片桥
 
 🌉 给 Apple 相册打造的开放桥梁，让你的自定义工作流与 AI Agent 可以接管并智能整理你的相册。
 
@@ -12,6 +12,7 @@ npm run dev:server
 ```
 
 （可选）🐳 Docker 部署
+
 ```bash
 # 构建服务端镜像
 docker build -f apps/server/Dockerfile -t photos-bridge-server:latest .

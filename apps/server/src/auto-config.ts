@@ -1,8 +1,5 @@
-/**
- * @file auto-config.ts
- * @description Development-time environment auto-configuration shared by direct and watch-mode startup.
- * @author iBenzene
- */
+// src/auto-config.ts
+
 import crypto from "node:crypto";
 import os from "node:os";
 import readline from "node:readline/promises";
@@ -31,7 +28,9 @@ export const prepareEnvironment = async (): Promise<void> => {
         console.log(`💡 [Auto-Config] Generated random PHOTOS_BRIDGE_ADMIN_KEY: ${autoKey}`);
     }
 
-    if (process.env.PUBLIC_BASE_URL) return;
+    if (process.env.PUBLIC_BASE_URL) {
+        return;
+    }
 
     if (isProduction) {
         throw new Error("Fatal Error: PUBLIC_BASE_URL environment variable is mandatory in production mode.");

@@ -1,8 +1,5 @@
-/**
- * @file plans.ts
- * @description Immutable plan creation and retrieval.
- * @author iBenzene
- */
+// src/plans.ts
+
 import crypto from "node:crypto";
 import type { PhotosBridgeDatabase } from "./database.js";
 import { id, now } from "./database.js";
@@ -47,22 +44,34 @@ export class PlanService {
             throw new PlanError("INVALID_REQUEST", 400);
         }
         const operation = input.operation ?? "album_members.add";
-        if (!isPlanOperation(operation)) throw new PlanError("OPERATION_UNSUPPORTED", 400);
-        if (!this.database.getDevice(input.device_id)) throw new PlanError("DEVICE_NOT_FOUND", 404);
+        if (!isPlanOperation(operation)) {
+            throw new PlanError("OPERATION_UNSUPPORTED", 400);
+        }
+        if (!this.database.getDevice(input.device_id)) {
+            throw new PlanError("DEVICE_NOT_FOUND", 404);
+        }
         const device = this.database.getDevice(input.device_id)!;
         const capabilities = new Set(JSON.parse(device.capabilities_json) as string[]);
-        if (!capabilities.has("albums.membership.write")) throw new PlanError("CAPABILITY_NOT_GRANTED", 403);
+        if (!capabilities.has("albums.membership.write")) {
+            throw new PlanError("CAPABILITY_NOT_GRANTED", 403);
+        }
 
         const idempotencyKey = input.idempotency_key.trim();
         const summary = input.summary.trim();
         if (!idempotencyKey || idempotencyKey.length > 200 || summary.length > 500) {
             throw new PlanError("INVALID_REQUEST", 400);
         }
-        if (input.asset_ids.some(value => typeof value !== "string")) throw new PlanError("INVALID_REQUEST", 400);
+        if (input.asset_ids.some(value => typeof value !== "string")) {
+            throw new PlanError("INVALID_REQUEST", 400);
+        }
         const rawAssetIDs = input.asset_ids.map(value => value.trim());
-        if (rawAssetIDs.some(assetID => !assetID)) throw new PlanError("INVALID_REQUEST", 400);
+        if (rawAssetIDs.some(assetID => !assetID)) {
+            throw new PlanError("INVALID_REQUEST", 400);
+        }
         const assetIDs = [...new Set(rawAssetIDs)].sort();
-        if (assetIDs.length === 0 || assetIDs.length > 5000) throw new PlanError("PLAN_SIZE_INVALID", 400);
+        if (assetIDs.length === 0 || assetIDs.length > 5000) {
+            throw new PlanError("PLAN_SIZE_INVALID", 400);
+        }
         if (
             (operation === "album_members.add" && input.source_album !== undefined) ||
             (operation === "album_members.remove" && input.target_album !== undefined)
@@ -198,9 +207,13 @@ const compactPlanContent = <T extends Record<string, unknown>>(value: T): T =>
     Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
 
 const normalizeSourceAlbum = (album: AlbumReference | undefined): AlbumReference => {
-    if (typeof album?.id !== "string" || typeof album.name !== "string") throw new PlanError("INVALID_REQUEST", 400);
+    if (typeof album?.id !== "string" || typeof album.name !== "string") {
+        throw new PlanError("INVALID_REQUEST", 400);
+    }
     const normalized = { id: album.id.trim(), name: album.name.trim() };
-    if (!normalized.id || !normalized.name || normalized.name.length > 255) throw new PlanError("INVALID_REQUEST", 400);
+    if (!normalized.id || !normalized.name || normalized.name.length > 255) {
+        throw new PlanError("INVALID_REQUEST", 400);
+    }
     return normalized;
 };
 
@@ -226,8 +239,12 @@ const hashCanonical = (value: unknown): string =>
     crypto.createHash("sha256").update(canonicalJSON(value)).digest("hex");
 
 const canonicalJSON = (value: unknown): string => {
-    if (value === null || typeof value !== "object") return JSON.stringify(value);
-    if (Array.isArray(value)) return `[${value.map(canonicalJSON).join(",")}]`;
+    if (value === null || typeof value !== "object") {
+        return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+        return `[${value.map(canonicalJSON).join(",")}]`;
+    }
     const object = value as Record<string, unknown>;
     return `{${Object.keys(object)
         .sort()

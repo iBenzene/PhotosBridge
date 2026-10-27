@@ -1,8 +1,5 @@
-/**
- * @file dev.ts
- * @description Interactive development launcher that configures the environment before starting tsx watch.
- * @author iBenzene
- */
+// src/dev.ts
+
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { prepareEnvironment } from "./auto-config.js";

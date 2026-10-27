@@ -1,8 +1,5 @@
-/**
- * @file index.ts
- * @description Server entry point handling startup initialization and CLI server runner.
- * @author iBenzene
- */
+// src/index.ts
+
 import http from "node:http";
 import QRCode from "qrcode";
 import { createApp } from "./app.js";
@@ -16,7 +13,9 @@ const startServer = async (): Promise<void> => {
 
     const config = loadConfig();
     const database = new PhotosBridgeDatabase(config.databasePath);
-    if (config.adminKey) database.seedAdminKey(config.adminKey);
+    if (config.adminKey) {
+        database.seedAdminKey(config.adminKey);
+    }
 
     const hub = new DeviceHub(database);
     const app = createApp({ config, database, hub });

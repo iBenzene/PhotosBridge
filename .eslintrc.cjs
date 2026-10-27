@@ -22,6 +22,12 @@ module.exports = {
     plugins: ["@typescript-eslint", "sort-keys-fix", "jsonc"],
     overrides: [
         {
+            files: ["**/*.ts", "**/*.tsx"],
+            rules: {
+                curly: ["error", "all"],
+            },
+        },
+        {
             // Configuration files - exempt from object key sorting
             files: [".eslintrc.cjs", ".prettierrc.cjs", "*.config.js", "*.config.cjs"],
             rules: {
