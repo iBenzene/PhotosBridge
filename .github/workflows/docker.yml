@@ -140,11 +140,17 @@ jobs:
 
                       # Update the image reference in .env for Docker Compose
                       touch .env
-                      sed -i '/^PHOTOS_BRIDGE_IMAGE=/d' .env
-                      printf '\nPHOTOS_BRIDGE_IMAGE=%s\n' "$CURRENT_IMAGE" >> .env
+                      if grep -q '^PHOTOS_BRIDGE_IMAGE=' .env; then
+                        sed -i "s|^PHOTOS_BRIDGE_IMAGE=[^\r]*|PHOTOS_BRIDGE_IMAGE=$CURRENT_IMAGE|" .env
+                      else
+                        if [ -s .env ] && [ -n "$(tail -c 1 .env)" ]; then
+                          printf '\n' >> .env
+                        fi
+                        printf 'PHOTOS_BRIDGE_IMAGE=%s\n' "$CURRENT_IMAGE" >> .env
+                      fi
 
                       # Recreate the service using the published image
-                      sudo docker compose up -d --no-build photos-bridge-server
+                      sudo docker compose up -d --no-build
 
                       # Clean up old tags only for this repository
                       CURRENT_ID=$(sudo docker image inspect --format '{{.Id}}' "$CURRENT_IMAGE")
