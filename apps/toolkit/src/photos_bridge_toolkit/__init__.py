@@ -10,9 +10,9 @@ from .models import (
     TemporalMatch,
     VectorMatch,
 )
-from .paths import default_data_directory
 from .search import cosine_search, perceptual_hash_search, temporal_neighbors
 from .store import ToolkitStore
+from .sync import cache_thumbnails, sync_assets
 
 __all__ = [
     "Album",
@@ -26,7 +26,8 @@ __all__ = [
     "TemporalMatch",
     "VectorMatch",
     "cosine_search",
-    "default_data_directory",
+    "cache_thumbnails",
     "perceptual_hash_search",
     "temporal_neighbors",
+    "sync_assets",
 ]

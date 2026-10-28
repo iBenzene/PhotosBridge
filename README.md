@@ -36,4 +36,4 @@ docker compose up -d
 
 ### 🧰 接入工作流 / AI 智能体
 
-完成配对后，即可通过 Python 工具库拉取照片元数据与缩略图，并结合多模态检索或 AI 模型制定相册整理方案。详细接入方式请参阅 **[Photos Bridge Toolkit 文档](apps/toolkit/README.md)**。
+完成配对后，即可编写自定义工作流、Python 脚本，或借助 AI 智能体制定相册整理方案。详细接入方式请参阅 **[Photos Bridge Toolkit 文档](apps/toolkit/README.md)**。

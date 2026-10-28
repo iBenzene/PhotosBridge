@@ -18,6 +18,8 @@ def parse_datetime(value: object) -> datetime | None:
 
 @dataclass(frozen=True, slots=True)
 class Asset:
+    """单张照片或视频资产的基础元数据模型。"""
+
     id: str
     kind: str
     subtype: str | None
@@ -51,6 +53,8 @@ class Asset:
 
 @dataclass(frozen=True, slots=True)
 class AssetPage:
+    """照片资产元数据分页快照模型。"""
+
     snapshot_id: str
     items: tuple[Asset, ...]
     next_cursor: str | None
@@ -68,6 +72,8 @@ class AssetPage:
 
 @dataclass(frozen=True, slots=True)
 class Album:
+    """相册元数据模型。"""
+
     id: str
     title: str
     asset_count: int
@@ -85,12 +91,16 @@ class Album:
 
 @dataclass(frozen=True, slots=True)
 class Embedding:
+    """照片特征向量嵌入数据模型。"""
+
     asset_id: str
     vector: NDArray[np.float32]
 
 
 @dataclass(frozen=True, slots=True)
 class VectorMatch:
+    """向量余弦相似度检索匹配结果。"""
+
     asset_id: str
     score: float
     query_index: int
@@ -98,6 +108,8 @@ class VectorMatch:
 
 @dataclass(frozen=True, slots=True)
 class HashMatch:
+    """感知哈希汉明距离匹配结果。"""
+
     reference_asset_id: str
     asset_id: str
     distance: int
@@ -105,6 +117,8 @@ class HashMatch:
 
 @dataclass(frozen=True, slots=True)
 class TemporalMatch:
+    """时间窗口邻近照片匹配结果。"""
+
     reference_asset_id: str
     asset_id: str
     seconds_apart: float

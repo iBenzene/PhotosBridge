@@ -124,6 +124,30 @@ def test_perceptual_hashes_support_batch_writes(tmp_path: Path) -> None:
         }
 
 
+def test_explicit_storage_reopens_existing_cache(tmp_path: Path, monkeypatch) -> None:
+    ignored = tmp_path / "ignored"
+    monkeypatch.setenv("PHOTOS_BRIDGE_TOOLKIT_DATA_DIR", str(ignored))
+    chosen = tmp_path / "chosen"
+    with ToolkitStore(chosen) as store:
+        store.put_hash("device", "hash", "asset", 1, 8)
+    with ToolkitStore(root=chosen) as store:
+        assert store.load_hashes("device", "hash") == {"asset": 1}
+    assert not ignored.exists()
+
+
+def test_missing_or_empty_root_creates_no_implicit_storage(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(TypeError):
+        ToolkitStore()
+    with pytest.raises(TypeError):
+        ToolkitStore(None)
+    with pytest.raises(ValueError):
+        ToolkitStore("")
+    assert list(tmp_path.iterdir()) == []
+
+
 def asset(asset_id: str) -> Asset:
     return Asset(
         id=asset_id,
