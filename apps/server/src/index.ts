@@ -21,7 +21,7 @@ const startServer = async (): Promise<void> => {
     const server = http.createServer(app);
     hub.attach(server);
 
-    server.listen(config.port, '0.0.0.0', () => {
+    server.listen({ host: '::', ipv6Only: false, port: config.port }, () => {
         console.log(`Photos Bridge listening on port ${config.port}`);
         console.log(
             `Admin panel: ${config.publicBaseURL.replace(/\/$/, '')}/ui/`
