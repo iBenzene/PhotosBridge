@@ -100,7 +100,7 @@
 /* Library Access */
 "授权后才能浏览获准访问的照片。" = "Grant access to browse allowed photos.";
 "没有可见照片" = "No Visible Photos";
-"正在加载…" = "Loading…";
+"正在加载..." = "Loading...";
 "加载更多" = "Load More";
 "授权照片" = "Authorized Photos";
 "视频" = "Video";

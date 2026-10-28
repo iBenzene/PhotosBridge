@@ -1,9 +1,23 @@
 // src/database.ts
 
-import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-import Database from "better-sqlite3";
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import Database from 'better-sqlite3';
+
+const defaultMigrationPath = (() => {
+    const cwdPath = path.resolve('database.sql');
+    if (fs.existsSync(cwdPath)) {
+        return cwdPath;
+    }
+    const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+    const relativePath = path.resolve(moduleDir, '../database.sql');
+    if (fs.existsSync(relativePath)) {
+        return relativePath;
+    }
+    return cwdPath;
+})();
 
 export type DeviceRecord = {
     id: string;
@@ -18,15 +32,15 @@ export type DeviceRecord = {
 export class PhotosBridgeDatabase {
     readonly connection: Database.Database;
 
-    constructor(databasePath: string, migrationPath = path.resolve("migrations/001_initial.sql")) {
-        if (databasePath !== ":memory:") {
+    constructor(databasePath: string, migrationPath = defaultMigrationPath) {
+        if (databasePath !== ':memory:') {
             fs.mkdirSync(path.dirname(databasePath), { recursive: true });
         }
         this.connection = new Database(databasePath);
-        this.connection.pragma("journal_mode = WAL");
-        this.connection.pragma("foreign_keys = ON");
-        this.connection.pragma("busy_timeout = 5000");
-        this.connection.exec(fs.readFileSync(migrationPath, "utf8"));
+        this.connection.pragma('journal_mode = WAL');
+        this.connection.pragma('foreign_keys = ON');
+        this.connection.pragma('busy_timeout = 5000');
+        this.connection.exec(fs.readFileSync(migrationPath, 'utf8'));
         this.ensurePlanOperationColumns();
     }
 
@@ -36,26 +50,40 @@ export class PhotosBridgeDatabase {
 
     private ensurePlanOperationColumns(): void {
         const columns = new Set(
-            (this.connection.pragma("table_info(plans)") as Array<{ name: string }>).map(column => column.name)
+            (
+                this.connection.pragma('table_info(plans)') as Array<{
+                    name: string;
+                }>
+            ).map(column => column.name)
         );
-        if (!columns.has("operation")) {
-            this.connection.exec("ALTER TABLE plans ADD COLUMN operation TEXT");
+        if (!columns.has('operation')) {
+            this.connection.exec('ALTER TABLE plans ADD COLUMN operation TEXT');
         }
-        if (!columns.has("source_album_json")) {
-            this.connection.exec("ALTER TABLE plans ADD COLUMN source_album_json TEXT");
+        if (!columns.has('source_album_json')) {
+            this.connection.exec(
+                'ALTER TABLE plans ADD COLUMN source_album_json TEXT'
+            );
         }
     }
 
     seedAdminKey(key: string): void {
         const existing = this.connection
-            .prepare("SELECT id, key_hash FROM api_keys WHERE name = ? AND revoked_at IS NULL")
-            .get("bootstrap-admin") as { id: string; key_hash: string } | undefined;
+            .prepare(
+                'SELECT id, key_hash FROM api_keys WHERE name = ? AND revoked_at IS NULL'
+            )
+            .get('bootstrap-admin') as
+            { id: string; key_hash: string } | undefined;
         const keyHash = hashSecret(key);
-        const scopes = JSON.stringify(["admin", "library.read", "plans.write"]);
+        const scopes = JSON.stringify(['admin', 'library.read', 'plans.write']);
         if (existing) {
             if (existing.key_hash !== keyHash) {
                 this.connection
-                    .prepare("UPDATE api_keys SET key_hash = ?, scopes_json = ? WHERE id = ?")
+                    .prepare('DELETE FROM ui_sessions WHERE key_hash = ?')
+                    .run(existing.key_hash);
+                this.connection
+                    .prepare(
+                        'UPDATE api_keys SET key_hash = ?, scopes_json = ? WHERE id = ?'
+                    )
                     .run(keyHash, scopes, existing.id);
             }
             return;
@@ -67,36 +95,55 @@ export class PhotosBridgeDatabase {
       VALUES (?, ?, ?, ?)
     `
             )
-            .run(id("key"), "bootstrap-admin", keyHash, scopes);
+            .run(id('key'), 'bootstrap-admin', keyHash, scopes);
     }
 
-    createAPIKey(name: string, scopes: string[]): { id: string; key: string; scopes: string[] } {
-        const allowed = new Set(["admin", "library.read", "plans.write"]);
-        const normalizedScopes = [...new Set(scopes)].filter(scope => allowed.has(scope)).sort();
+    createAPIKey(
+        name: string,
+        scopes: string[]
+    ): { id: string; key: string; scopes: string[] } {
+        const allowed = new Set(['admin', 'library.read', 'plans.write']);
+        const normalizedScopes = [...new Set(scopes)]
+            .filter(scope => allowed.has(scope))
+            .sort();
         if (!name.trim() || normalizedScopes.length === 0) {
-            throw new Error("INVALID_API_KEY");
+            throw new Error('INVALID_API_KEY');
         }
-        const keyID = id("key");
-        const key = `pbk_${crypto.randomBytes(32).toString("base64url")}`;
+        const keyID = id('key');
+        const key = `pbk_${crypto.randomBytes(32).toString('base64url')}`;
         this.connection
             .prepare(
                 `INSERT INTO api_keys (id, name, key_hash, scopes_json)
       VALUES (?, ?, ?, ?)`
             )
-            .run(keyID, name.trim(), hashSecret(key), JSON.stringify(normalizedScopes));
+            .run(
+                keyID,
+                name.trim(),
+                hashSecret(key),
+                JSON.stringify(normalizedScopes)
+            );
         return { id: keyID, key, scopes: normalizedScopes };
     }
 
     revokeAPIKey(keyID: string): boolean {
+        this.connection
+            .prepare(
+                'DELETE FROM ui_sessions WHERE key_hash IN (SELECT key_hash FROM api_keys WHERE id = ?)'
+            )
+            .run(keyID);
         const result = this.connection
-            .prepare("UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
+            .prepare(
+                'UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL'
+            )
             .run(now(), keyID);
         return result.changes > 0;
     }
 
     authenticateAPIKey(key: string): { scopes: string[] } | null {
         const row = this.connection
-            .prepare("SELECT scopes_json FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL")
+            .prepare(
+                'SELECT scopes_json FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL'
+            )
             .get(hashSecret(key)) as { scopes_json: string } | undefined;
         return row ? { scopes: JSON.parse(row.scopes_json) as string[] } : null;
     }
@@ -104,9 +151,14 @@ export class PhotosBridgeDatabase {
     /**
      * 生成单次有效的设备配对会话令牌, 并设定过期时间。
      */
-    createPairingSession(ttlSeconds = 300): { token: string; expiresAt: string } {
-        const token = `pbp_${crypto.randomBytes(32).toString("base64url")}`;
-        const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+    createPairingSession(ttlSeconds = 300): {
+        token: string;
+        expiresAt: string;
+    } {
+        const token = `pbp_${crypto.randomBytes(32).toString('base64url')}`;
+        const expiresAt = new Date(
+            Date.now() + ttlSeconds * 1000
+        ).toISOString();
         this.connection
             .prepare(
                 `
@@ -116,6 +168,32 @@ export class PhotosBridgeDatabase {
             )
             .run(hashSecret(token), expiresAt);
         return { expiresAt, token };
+    }
+
+    pairingStatus(token: string): 'pending' | 'paired' | 'expired' | 'invalid' {
+        const session = this.connection
+            .prepare(
+                'SELECT expires_at, consumed FROM pairing_sessions WHERE token_hash = ?'
+            )
+            .get(hashSecret(token)) as
+            { expires_at: string; consumed: number } | undefined;
+        if (!session) {
+            return 'invalid';
+        }
+        if (session.consumed) {
+            return 'paired';
+        }
+        return Date.parse(session.expires_at) <= Date.now()
+            ? 'expired'
+            : 'pending';
+    }
+
+    cancelPairing(token: string): void {
+        this.connection
+            .prepare(
+                'DELETE FROM pairing_sessions WHERE token_hash = ? AND consumed = 0'
+            )
+            .run(hashSecret(token));
     }
 
     /**
@@ -129,27 +207,34 @@ export class PhotosBridgeDatabase {
         capabilities: string[];
     }): { deviceID: string; deviceSecret: string } {
         const session = this.connection
-            .prepare("SELECT expires_at, consumed FROM pairing_sessions WHERE token_hash = ?")
-            .get(hashSecret(input.token)) as { expires_at: string; consumed: number } | undefined;
+            .prepare(
+                'SELECT expires_at, consumed FROM pairing_sessions WHERE token_hash = ?'
+            )
+            .get(hashSecret(input.token)) as
+            { expires_at: string; consumed: number } | undefined;
         if (!session) {
-            throw new PairingError("PAIRING_INVALID", 404);
+            throw new PairingError('PAIRING_INVALID', 404);
         }
         if (session.consumed) {
-            throw new PairingError("PAIRING_ALREADY_USED", 409);
+            throw new PairingError('PAIRING_ALREADY_USED', 409);
         }
         if (new Date(session.expires_at).getTime() <= Date.now()) {
-            throw new PairingError("PAIRING_EXPIRED", 410);
+            throw new PairingError('PAIRING_EXPIRED', 410);
         }
         if (input.protocolVersion !== 1) {
-            throw new PairingError("PROTOCOL_VERSION_UNSUPPORTED", 400);
+            throw new PairingError('PROTOCOL_VERSION_UNSUPPORTED', 400);
         }
         const capabilities = [...new Set(input.capabilities)].sort();
-        if (capabilities.some(capability => !DEVICE_CAPABILITIES.has(capability))) {
-            throw new PairingError("CAPABILITY_UNSUPPORTED", 400);
+        if (
+            capabilities.some(
+                capability => !DEVICE_CAPABILITIES.has(capability)
+            )
+        ) {
+            throw new PairingError('CAPABILITY_UNSUPPORTED', 400);
         }
 
-        const deviceID = id("device");
-        const deviceSecret = `pbd_${crypto.randomBytes(32).toString("base64url")}`;
+        const deviceID = id('device');
+        const deviceSecret = `pbd_${crypto.randomBytes(32).toString('base64url')}`;
         const createdAt = now();
         const transaction = this.connection.transaction(() => {
             this.connection
@@ -159,12 +244,22 @@ export class PhotosBridgeDatabase {
         VALUES (?, ?, ?, ?, ?)
       `
                 )
-                .run(deviceID, input.displayName, input.appVersion, JSON.stringify(capabilities), createdAt);
+                .run(
+                    deviceID,
+                    input.displayName,
+                    input.appVersion,
+                    JSON.stringify(capabilities),
+                    createdAt
+                );
             this.connection
-                .prepare(`INSERT INTO device_credentials (device_id, secret_hash) VALUES (?, ?)`)
+                .prepare(
+                    `INSERT INTO device_credentials (device_id, secret_hash) VALUES (?, ?)`
+                )
                 .run(deviceID, hashSecret(deviceSecret));
             this.connection
-                .prepare("UPDATE pairing_sessions SET consumed = 1 WHERE token_hash = ?")
+                .prepare(
+                    'UPDATE pairing_sessions SET consumed = 1 WHERE token_hash = ?'
+                )
                 .run(hashSecret(input.token));
         });
         transaction();
@@ -185,25 +280,34 @@ export class PhotosBridgeDatabase {
     }
 
     touchDevice(deviceID: string): void {
-        this.connection.prepare("UPDATE devices SET last_seen_at = ? WHERE id = ?").run(now(), deviceID);
+        this.connection
+            .prepare('UPDATE devices SET last_seen_at = ? WHERE id = ?')
+            .run(now(), deviceID);
     }
 
     listDevices(): DeviceRecord[] {
         return this.connection
-            .prepare("SELECT * FROM devices WHERE revoked_at IS NULL ORDER BY paired_at DESC")
+            .prepare(
+                'SELECT * FROM devices WHERE revoked_at IS NULL ORDER BY paired_at DESC'
+            )
             .all() as DeviceRecord[];
     }
 
     getDevice(deviceID: string): DeviceRecord | undefined {
-        return this.connection.prepare("SELECT * FROM devices WHERE id = ? AND revoked_at IS NULL").get(deviceID) as
-            DeviceRecord | undefined;
+        return this.connection
+            .prepare(
+                'SELECT * FROM devices WHERE id = ? AND revoked_at IS NULL'
+            )
+            .get(deviceID) as DeviceRecord | undefined;
     }
 
     revokeDevice(deviceID: string): boolean {
         const timestamp = now();
         const transaction = this.connection.transaction(() => {
             const result = this.connection
-                .prepare("UPDATE devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
+                .prepare(
+                    'UPDATE devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL'
+                )
                 .run(timestamp, deviceID);
             return result.changes > 0;
         });
@@ -220,22 +324,27 @@ export class PairingError extends Error {
     }
 }
 
-export const hashSecret = (secret: string): string => crypto.createHash("sha256").update(secret, "utf8").digest("hex");
+export const hashSecret = (secret: string): string =>
+    crypto.createHash('sha256').update(secret, 'utf8').digest('hex');
 
-export const id = (prefix: string): string => `${prefix}_${crypto.randomUUID().replaceAll("-", "")}`;
+export const id = (prefix: string): string =>
+    `${prefix}_${crypto.randomUUID().replaceAll('-', '')}`;
 
 export const now = (): string => new Date().toISOString();
 
 const safeEqual = (left: string, right: string): boolean => {
     const leftBuffer = Buffer.from(left);
     const rightBuffer = Buffer.from(right);
-    return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+    return (
+        leftBuffer.length === rightBuffer.length &&
+        crypto.timingSafeEqual(leftBuffer, rightBuffer)
+    );
 };
 
 const DEVICE_CAPABILITIES = new Set([
-    "albums.create",
-    "albums.membership.write",
-    "assets.thumbnail.read",
-    "library.albums.read",
-    "library.metadata.read",
+    'albums.create',
+    'albums.membership.write',
+    'assets.thumbnail.read',
+    'library.albums.read',
+    'library.metadata.read'
 ]);

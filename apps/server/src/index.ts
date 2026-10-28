@@ -1,12 +1,11 @@
 // src/index.ts
 
-import http from "node:http";
-import QRCode from "qrcode";
-import { createApp } from "./app.js";
-import { prepareEnvironment } from "./auto-config.js";
-import { loadConfig } from "./config.js";
-import { PhotosBridgeDatabase } from "./database.js";
-import { DeviceHub } from "./device-hub.js";
+import http from 'node:http';
+import { createApp } from './app.js';
+import { prepareEnvironment } from './auto-config.js';
+import { loadConfig } from './config.js';
+import { PhotosBridgeDatabase } from './database.js';
+import { DeviceHub } from './device-hub.js';
 
 const startServer = async (): Promise<void> => {
     await prepareEnvironment();
@@ -22,51 +21,23 @@ const startServer = async (): Promise<void> => {
     const server = http.createServer(app);
     hub.attach(server);
 
-    server.listen(config.port, "0.0.0.0", async () => {
-        console.log(`\n====================================================================`);
-        console.log(`🚀 Photos Bridge Server 0.1.0 listening on port ${config.port}`);
-        console.log(`====================================================================`);
-        console.log(`📍 Base URL:   ${config.publicBaseURL}`);
-        console.log(`🔑 Admin Key:  ${config.adminKey}`);
-        console.log(`--------------------------------------------------------------------`);
-
-        // 服务启动时自动创建一个有效期为 24 小时 (86400 秒) 的设备配对会话。
-        const session = database.createPairingSession(86400);
-
-        const qrPayload = {
-            expires_at: session.expiresAt,
-            pairing_token: session.token,
-            server_url: config.publicBaseURL,
-        };
-
-        console.log(`🎟️  Pairing Token: ${session.token}`);
-        console.log(`⏳ Expires At:     24 hours (${session.expiresAt})`);
-        console.log(`\n📱 Scan QR Code in iOS Photos Bridge App ("Scan QR Code"): \n`);
-
-        try {
-            const qrTerminal = await QRCode.toString(JSON.stringify(qrPayload), {
-                small: true,
-                type: "terminal",
-            });
-            console.log(qrTerminal);
-        } catch (err) {
-            console.error("Failed to generate QR code:", err);
-        }
-
-        console.log(`====================================================================\n`);
+    server.listen(config.port, '0.0.0.0', () => {
+        console.log(`Photos Bridge listening on port ${config.port}`);
+        console.log(
+            `Admin panel: ${config.publicBaseURL.replace(/\/$/, '')}/ui/`
+        );
     });
-
     const shutdown = (): void => {
         server.close(() => {
             database.close();
             process.exit(0);
         });
     };
-    process.on("SIGINT", shutdown);
-    process.on("SIGTERM", shutdown);
+    process.on('SIGINT', shutdown);
+    process.on('SIGTERM', shutdown);
 };
 
 startServer().catch(err => {
-    console.error("Failed to start server:", err);
+    console.error('Failed to start server:', err);
     process.exit(1);
 });

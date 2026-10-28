@@ -1,3 +1,5 @@
+-- database.sql
+
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS devices (
@@ -53,3 +55,10 @@ CREATE TABLE IF NOT EXISTS plan_deliveries (
 
 CREATE INDEX IF NOT EXISTS plan_deliveries_status_idx ON plan_deliveries(status);
 CREATE INDEX IF NOT EXISTS plan_deliveries_plan_idx ON plan_deliveries(plan_id, created_at);
+
+CREATE TABLE IF NOT EXISTS ui_sessions (
+    token_hash TEXT PRIMARY KEY,
+    key_hash TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ui_sessions_expiry ON ui_sessions(expires_at);

@@ -22,6 +22,8 @@ xcuserdata/
 # Node
 node_modules/
 coverage/
+.playwright-cli/
+output/playwright/
 dist/
 package-lock.json
 
@@ -40,3 +42,6 @@ data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Generated Husky files
+.husky/_/

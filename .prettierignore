@@ -1,17 +1,16 @@
-# Build outputs and dependencies
-node_modules
-.mypy_cache/
-dist
-build
+node_modules/
+dist/
+coverage/
+package-lock.json
+*.sass
+*.styl
+.env*
 
-# Data and SQLite files
-data/
-*.sqlite
-*.sqlite-journal
-*.db
-
-# Temporary logs and caches
-*.log
-.DS_Store
-.vscode
-.idea
+**/node_modules/**
+**/dist/**
+**/coverage/**
+**/package-lock.json
+**/build/**
+**/.mypy_cache/**
+**/data/**
+apps/apple/**

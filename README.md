@@ -14,15 +14,12 @@ npm run dev:server
 （可选）🐳 Docker 部署
 
 ```bash
-# 构建服务端镜像
-docker build -f apps/server/Dockerfile -t photos-bridge-server:latest .
-
-# 启动服务端容器
+sudo docker pull ghcr.io/ibenzene/photos-bridge_server:latest
 PUBLIC_BASE_URL='https://bridge.example.com' \
-PHOTOS_BRIDGE_ADMIN_KEY='your-high-entropy-key' \
-docker compose up -d
+ADMIN_KEY='your-high-entropy-key' \
+sudo docker compose up -d
 ```
 
 ### 📱 连接 iOS 客户端
 
-打开 App 点击「配对服务器」，扫描终端二维码即可配对 🎉。
+打开 App 点击「配对服务器」，扫描二维码即可配对 🎉。

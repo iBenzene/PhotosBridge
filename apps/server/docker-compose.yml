@@ -1,15 +1,18 @@
+name: ${COMPOSE_PROJECT_NAME:-photosbridge}
+
 services:
     photos-bridge-server:
+        image: ${PHOTOS_BRIDGE_IMAGE:-ghcr.io/ibenzene/photos-bridge_server:latest}
         build:
             context: .
-            dockerfile: apps/server/Dockerfile
+            dockerfile: Dockerfile
         ports:
-            - "8787:8787"
+            - '8787:8787'
         environment:
-            PORT: "8787"
+            PORT: '8787'
             DATABASE_PATH: /data/photos-bridge.sqlite
             PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?Set PUBLIC_BASE_URL to the trusted HTTPS address}
-            PHOTOS_BRIDGE_ADMIN_KEY: ${PHOTOS_BRIDGE_ADMIN_KEY:?Set a random high-entropy admin key}
+            ADMIN_KEY: ${ADMIN_KEY:?Set a random high-entropy admin key}
         volumes:
             - photos-bridge-data:/data
         restart: unless-stopped

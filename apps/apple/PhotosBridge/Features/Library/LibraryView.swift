@@ -38,7 +38,7 @@ struct LibraryView: View {
                         }
                     }
                     if model.nextCursor != nil {
-                        Button(model.isLoading ? String(localized: "正在加载…") : String(localized: "加载更多")) {
+                        Button(model.isLoading ? String(localized: "正在加载...") : String(localized: "加载更多")) {
                             Task { await model.loadNextPage() }
                         }
                         .disabled(model.isLoading)

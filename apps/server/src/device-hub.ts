@@ -1,10 +1,10 @@
 // src/device-hub.ts
 
-import type { IncomingMessage, Server } from "node:http";
-import { WebSocket, WebSocketServer } from "ws";
-import type { PhotosBridgeDatabase } from "./database.js";
-import { presentStoredPlan } from "./plans.js";
-import { id } from "./database.js";
+import type { IncomingMessage, Server } from 'node:http';
+import { WebSocket, WebSocketServer } from 'ws';
+import type { PhotosBridgeDatabase } from './database.js';
+import { presentStoredPlan } from './plans.js';
+import { id } from './database.js';
 
 export type ProtocolEnvelope = {
     protocol_version: 1;
@@ -44,19 +44,28 @@ export class DeviceHub {
      * 挂载 HTTP Upgrade 协议升级监听, 验证设备身份并接入 WebSocket 长连接。
      */
     attach(server: Server): void {
-        server.on("upgrade", (request, socket, head) => {
-            const url = new URL(request.url ?? "/", "http://localhost");
-            if (url.pathname !== "/device/v1/connect") {
+        server.on('upgrade', (request, socket, head) => {
+            const url = new URL(request.url ?? '/', 'http://localhost');
+            if (url.pathname !== '/device/v1/connect') {
                 return socket.destroy();
             }
-            const deviceID = url.searchParams.get("device_id") ?? "";
+            const deviceID = url.searchParams.get('device_id') ?? '';
             const secret = bearer(request);
-            if (!deviceID || !secret || !this.database.authenticateDevice(deviceID, secret)) {
+            if (
+                !deviceID ||
+                !secret ||
+                !this.database.authenticateDevice(deviceID, secret)
+            ) {
                 return socket.destroy();
             }
-            this.websocketServer.handleUpgrade(request, socket, head, websocket => {
-                this.accept(deviceID, websocket);
-            });
+            this.websocketServer.handleUpgrade(
+                request,
+                socket,
+                head,
+                websocket => {
+                    this.accept(deviceID, websocket);
+                }
+            );
         });
     }
 
@@ -65,19 +74,24 @@ export class DeviceHub {
     }
 
     disconnect(deviceID: string): void {
-        this.sockets.get(deviceID)?.close(1008, "device revoked");
+        this.sockets.get(deviceID)?.close(1008, 'device revoked');
         this.sockets.delete(deviceID);
     }
 
     /**
      * 向指定在线设备发起反向 RPC 消息请求, 并基于消息 ID 等待移动端响应或超时中止。
      */
-    async request(deviceID: string, type: string, payload: unknown, timeoutMilliseconds = 15_000): Promise<unknown> {
+    async request(
+        deviceID: string,
+        type: string,
+        payload: unknown,
+        timeoutMilliseconds = 15_000
+    ): Promise<unknown> {
         const socket = this.sockets.get(deviceID);
         if (!socket || socket.readyState !== WebSocket.OPEN) {
             throw new DeviceOfflineError();
         }
-        const messageID = id("msg");
+        const messageID = id('msg');
         const envelope: ProtocolEnvelope = {
             correlation_id: null,
             device_id: deviceID,
@@ -85,7 +99,7 @@ export class DeviceHub {
             payload,
             protocol_version: 1,
             sent_at: new Date().toISOString(),
-            type,
+            type
         };
         const result = new Promise<unknown>((resolve, reject) => {
             const timer = setTimeout(() => {
@@ -98,11 +112,15 @@ export class DeviceHub {
         return result;
     }
 
-    enqueuePlanDelivery(planID: string, deliveryExpiresAt: string): PlanDelivery {
-        const plan = this.database.connection.prepare("SELECT device_id FROM plans WHERE id = ?").get(planID) as
-            { device_id: string } | undefined;
+    enqueuePlanDelivery(
+        planID: string,
+        deliveryExpiresAt: string
+    ): PlanDelivery {
+        const plan = this.database.connection
+            .prepare('SELECT device_id FROM plans WHERE id = ?')
+            .get(planID) as { device_id: string } | undefined;
         if (!plan) {
-            throw new Error("PLAN_NOT_FOUND");
+            throw new Error('PLAN_NOT_FOUND');
         }
         const existing = this.database.connection
             .prepare(
@@ -116,7 +134,7 @@ export class DeviceHub {
         if (existing) {
             return this.getLatestPlanDelivery(planID)!;
         }
-        const deliveryID = id("delivery");
+        const deliveryID = id('delivery');
         const timestamp = new Date().toISOString();
         this.database.connection
             .prepare(
@@ -139,12 +157,14 @@ export class DeviceHub {
     }
 
     private accept(deviceID: string, socket: WebSocket): void {
-        this.sockets.get(deviceID)?.close(1000, "replaced by a newer connection");
+        this.sockets
+            .get(deviceID)
+            ?.close(1000, 'replaced by a newer connection');
         this.sockets.set(deviceID, socket);
         this.database.touchDevice(deviceID);
-        socket.on("pong", () => this.database.touchDevice(deviceID));
-        socket.on("message", data => this.receive(deviceID, data.toString()));
-        socket.on("close", () => {
+        socket.on('pong', () => this.database.touchDevice(deviceID));
+        socket.on('message', data => this.receive(deviceID, data.toString()));
+        socket.on('close', () => {
             if (this.sockets.get(deviceID) === socket) {
                 this.sockets.delete(deviceID);
             }
@@ -154,11 +174,11 @@ export class DeviceHub {
             JSON.stringify({
                 correlation_id: null,
                 device_id: deviceID,
-                message_id: id("msg"),
+                message_id: id('msg'),
                 payload: { heartbeat_seconds: 25 },
                 protocol_version: 1,
                 sent_at: new Date().toISOString(),
-                type: "session.ready",
+                type: 'session.ready'
             } satisfies ProtocolEnvelope)
         );
         this.deliverQueued(deviceID);
@@ -171,7 +191,10 @@ export class DeviceHub {
         } catch {
             return;
         }
-        if (envelope.protocol_version !== 1 || envelope.device_id !== deviceID) {
+        if (
+            envelope.protocol_version !== 1 ||
+            envelope.device_id !== deviceID
+        ) {
             return;
         }
         this.database.touchDevice(deviceID);
@@ -184,20 +207,28 @@ export class DeviceHub {
                  JOIN plans p ON p.id = pd.plan_id
                  WHERE pd.id = ? AND p.device_id = ?`
             )
-            .get(envelope.correlation_id, deviceID) as { id: string; plan_id: string } | undefined;
+            .get(envelope.correlation_id, deviceID) as
+            { id: string; plan_id: string } | undefined;
         if (delivery) {
-            const payload = envelope.payload as { plan_id?: unknown; stored?: unknown } | null;
+            const payload = envelope.payload as {
+                plan_id?: unknown;
+                stored?: unknown;
+            } | null;
             const stored =
-                envelope.type === "plans.delivery.response" &&
+                envelope.type === 'plans.delivery.response' &&
                 payload?.stored === true &&
                 payload.plan_id === delivery.plan_id;
             if (stored) {
                 this.database.connection
-                    .prepare("UPDATE plan_deliveries SET status = 'stored' WHERE id = ?")
+                    .prepare(
+                        "UPDATE plan_deliveries SET status = 'stored' WHERE id = ?"
+                    )
                     .run(delivery.id);
-            } else if (envelope.type === "plans.delivery.error") {
+            } else if (envelope.type === 'plans.delivery.error') {
                 this.database.connection
-                    .prepare("UPDATE plan_deliveries SET status = 'failed' WHERE id = ?")
+                    .prepare(
+                        "UPDATE plan_deliveries SET status = 'failed' WHERE id = ?"
+                    )
                     .run(delivery.id);
             }
         }
@@ -207,7 +238,7 @@ export class DeviceHub {
         }
         clearTimeout(pending.timer);
         this.pending.delete(envelope.correlation_id);
-        if (envelope.type.endsWith(".error")) {
+        if (envelope.type.endsWith('.error')) {
             pending.reject(new DeviceResponseError(envelope.payload));
         } else {
             pending.resolve(envelope.payload);
@@ -230,23 +261,31 @@ export class DeviceHub {
       ORDER BY pd.created_at ASC
     `
             )
-            .all(deviceID, new Date().toISOString()) as Array<Record<string, unknown>>;
+            .all(deviceID, new Date().toISOString()) as Array<
+            Record<string, unknown>
+        >;
         for (const delivery of deliveries) {
-            const plan = presentStoredPlan({ ...delivery, device_id: deviceID, id: delivery.plan_id });
+            const plan = presentStoredPlan({
+                ...delivery,
+                device_id: deviceID,
+                id: delivery.plan_id
+            });
             const envelope: ProtocolEnvelope = {
                 correlation_id: null,
                 device_id: deviceID,
                 message_id: String(delivery.id),
                 payload: {
-                    ...plan,
+                    ...plan
                 },
                 protocol_version: 1,
                 sent_at: new Date().toISOString(),
-                type: "plans.delivery.request",
+                type: 'plans.delivery.request'
             };
             socket.send(JSON.stringify(envelope));
             this.database.connection
-                .prepare("UPDATE plan_deliveries SET status = 'sent' WHERE id = ?")
+                .prepare(
+                    "UPDATE plan_deliveries SET status = 'sent' WHERE id = ?"
+                )
                 .run(delivery.id);
         }
         this.database.connection
@@ -262,19 +301,19 @@ export class DeviceHub {
 }
 
 export class DeviceOfflineError extends Error {
-    readonly code = "DEVICE_OFFLINE";
+    readonly code = 'DEVICE_OFFLINE';
 }
 export class DeviceTimeoutError extends Error {
-    readonly code = "DEVICE_TIMEOUT";
+    readonly code = 'DEVICE_TIMEOUT';
 }
 export class DeviceResponseError extends Error {
-    readonly code = "DEVICE_RESPONSE_ERROR";
+    readonly code = 'DEVICE_RESPONSE_ERROR';
     constructor(readonly payload: unknown) {
-        super("Device returned an error");
+        super('Device returned an error');
     }
 }
 
 const bearer = (request: IncomingMessage): string | null => {
     const value = request.headers.authorization;
-    return value?.startsWith("Bearer ") ? value.slice(7) : null;
+    return value?.startsWith('Bearer ') ? value.slice(7) : null;
 };

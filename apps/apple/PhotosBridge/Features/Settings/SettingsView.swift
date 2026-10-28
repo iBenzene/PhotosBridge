@@ -39,7 +39,7 @@ struct SettingsView: View {
                 LabeledContent("状态", value: model.serverConnection.status.title)
                 if let server = model.serverConnection.server {
                     LabeledContent("地址", value: server.baseURL.absoluteString)
-                    LabeledContent("设备 ID", value: String(server.deviceID.prefix(18)) + "…")
+                    LabeledContent("设备 ID", value: String(server.deviceID.prefix(18)) + "...")
                     ForEach(server.capabilities, id: \.self) { capability in
                         Label(capability, systemImage: "checkmark.shield")
                             .font(.caption)

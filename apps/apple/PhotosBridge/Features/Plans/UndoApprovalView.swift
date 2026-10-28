@@ -26,7 +26,7 @@ struct HistoryActionApprovalView: View {
             List {
                 if let record {
                     Section {
-                        LabeledContent("记录", value: String(record.id.uuidString.prefix(18)) + "…")
+                        LabeledContent("记录", value: String(record.id.uuidString.prefix(18)) + "...")
                         LabeledContent("相册", value: record.result.albumName)
                         LabeledContent(
                             "成员关系",

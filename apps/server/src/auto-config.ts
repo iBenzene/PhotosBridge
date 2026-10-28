@@ -1,15 +1,14 @@
 // src/auto-config.ts
 
-import crypto from "node:crypto";
-import os from "node:os";
-import readline from "node:readline/promises";
+import os from 'node:os';
+import readline from 'node:readline/promises';
 
 const getLocalIPv4Addresses = (): string[] => {
     const interfaces = os.networkInterfaces();
     const ips: string[] = [];
     for (const name of Object.keys(interfaces)) {
         for (const iface of interfaces[name] ?? []) {
-            if (iface.family === "IPv4" && !iface.internal) {
+            if (iface.family === 'IPv4' && !iface.internal) {
                 ips.push(iface.address);
             }
         }
@@ -18,13 +17,14 @@ const getLocalIPv4Addresses = (): string[] => {
 };
 
 export const prepareEnvironment = async (): Promise<void> => {
-    const isProduction = process.env.NODE_ENV === "production";
+    const isProduction = process.env.NODE_ENV === 'production';
 
-    // 在父进程中生成一次管理密钥, 防止开发模式下的文件监听重启导致客户端密钥频繁失效。
-    if (!process.env.PHOTOS_BRIDGE_ADMIN_KEY) {
-        const autoKey = crypto.randomBytes(16).toString("hex");
-        process.env.PHOTOS_BRIDGE_ADMIN_KEY = autoKey;
-        console.log(`💡 [Auto-Config] Generated random PHOTOS_BRIDGE_ADMIN_KEY: ${autoKey}`);
+    // 非生产环境使用固定默认密钥, 生产环境必须显式配置。
+    if (!process.env.ADMIN_KEY) {
+        if (isProduction) {
+            throw new Error('ADMIN_KEY is required in production mode.');
+        }
+        process.env.ADMIN_KEY = '123456';
     }
 
     if (process.env.PUBLIC_BASE_URL) {
@@ -32,35 +32,45 @@ export const prepareEnvironment = async (): Promise<void> => {
     }
 
     if (isProduction) {
-        throw new Error("Fatal Error: PUBLIC_BASE_URL environment variable is mandatory in production mode.");
+        throw new Error(
+            'Fatal Error: PUBLIC_BASE_URL environment variable is mandatory in production mode.'
+        );
     }
 
     const port = Number(process.env.PORT ?? 8787);
     const localIPs = getLocalIPv4Addresses();
-    const availableIPs = [...localIPs, "127.0.0.1"];
+    const availableIPs = [...localIPs, '127.0.0.1'];
     let selectedIP = availableIPs[0];
 
     if (process.stdin.isTTY && availableIPs.length > 1) {
-        console.log("\n🔍 PUBLIC_BASE_URL is unset. Available local IP addresses:");
+        console.log(
+            '\n🔍 PUBLIC_BASE_URL is unset. Available local IP addresses:'
+        );
         availableIPs.forEach((ip, index) => {
             const hint =
                 index === 0
-                    ? " (Recommended for physical devices)"
-                    : ip === "127.0.0.1"
-                      ? " (Localhost/Simulator only)"
-                      : "";
+                    ? ' (Recommended for physical devices)'
+                    : ip === '127.0.0.1'
+                      ? ' (Localhost/Simulator only)'
+                      : '';
             console.log(`  [${index + 1}] http://${ip}:${port}${hint}`);
         });
 
         const rl = readline.createInterface({
             input: process.stdin,
-            output: process.stdout,
+            output: process.stdout
         });
 
         try {
-            const answer = await rl.question(`\nSelect IP number for pairing [default 1: ${selectedIP}]: `);
+            const answer = await rl.question(
+                `\nSelect IP number for pairing [default 1: ${selectedIP}]: `
+            );
             const choice = Number.parseInt(answer.trim(), 10);
-            if (!Number.isNaN(choice) && choice >= 1 && choice <= availableIPs.length) {
+            if (
+                !Number.isNaN(choice) &&
+                choice >= 1 &&
+                choice <= availableIPs.length
+            ) {
                 selectedIP = availableIPs[choice - 1];
             }
         } catch {
@@ -71,5 +81,7 @@ export const prepareEnvironment = async (): Promise<void> => {
     }
 
     process.env.PUBLIC_BASE_URL = `http://${selectedIP}:${port}`;
-    console.log(`💡 [Auto-Config] Set PUBLIC_BASE_URL to: ${process.env.PUBLIC_BASE_URL}`);
+    console.log(
+        `💡 [Auto-Config] Set PUBLIC_BASE_URL to: ${process.env.PUBLIC_BASE_URL}`
+    );
 };
