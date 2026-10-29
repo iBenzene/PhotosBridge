@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import type { Device } from '../api';
 
-// 渲染单台已配对设备卡片, 展示实时连接状态与操作入口。
+// 渲染单台已配对设备卡片, 展示实时连接状态与操作入口
 defineProps<{ device: Device }>();
 defineEmits<{ edit: [action: 'rename' | 'remove'] }>();
 const readableDate = (value: string | null) =>

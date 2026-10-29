@@ -7,7 +7,7 @@ import { useAction } from '../composables/useAction';
 import BaseDialog from './BaseDialog.vue';
 import ErrorMessage from './ErrorMessage.vue';
 
-// 设备修改与解绑弹窗, 根据传入的操作类型区分展示重命名或解绑确认表单。
+// 设备修改与解绑弹窗, 根据传入的操作类型区分展示重命名或解绑确认表单
 const props = defineProps<{
     api: AdminApi;
     device: Device;

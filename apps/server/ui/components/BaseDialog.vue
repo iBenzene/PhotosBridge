@@ -3,7 +3,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
-// 原生 HTMLDialogElement 模态弹窗封装, 挂载时自动调用「showModal」打开。
+// 原生 HTMLDialogElement 模态弹窗封装, 挂载时自动调用「showModal」打开
 withDefaults(defineProps<{ title: string; busy?: boolean }>(), { busy: false });
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement>();

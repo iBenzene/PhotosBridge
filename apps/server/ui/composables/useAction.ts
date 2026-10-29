@@ -3,8 +3,8 @@
 import { ref } from 'vue';
 
 /**
- * 异步操作执行状态管理组合式函数。
- * 跟踪繁忙中状态「busy」以防重复点击, 并捕获异常错误消息「error」。
+ * 异步操作执行状态管理组合式函数
+ * 跟踪繁忙中状态「busy」以防重复点击, 并捕获异常错误消息「error」
  */
 export const useAction = () => {
     const busy = ref(false);

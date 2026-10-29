@@ -10,7 +10,7 @@ import DeviceEditor from './DeviceEditor.vue';
 import PairingDialog from './PairingDialog.vue';
 import ErrorMessage from './ErrorMessage.vue';
 
-// 设备管理主控制台, 定期轮询设备状态并在标签页处于后台时自动静默挂起。
+// 设备管理主控制台, 定期轮询设备状态并在标签页处于后台时自动静默挂起
 const props = defineProps<{ api: AdminApi; serverUrl: string }>();
 const devices = ref<Device[]>([]);
 const loaded = ref(false);
@@ -26,7 +26,7 @@ const refresh = () =>
             loaded.value = true;
         }
     });
-// 页面处于前台可见状态时每 5 秒轮询刷新一次设备列表。
+// 页面处于前台可见状态时每 5 秒轮询刷新一次设备列表
 useInterval(() => {
     if (!document.hidden) {
         void refresh();

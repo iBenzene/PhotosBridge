@@ -7,7 +7,7 @@ import { auth } from '../auth';
 import { useAction } from '../composables/useAction';
 import ErrorMessage from './ErrorMessage.vue';
 
-// 管理员登录卡片表单, 校验并暂存管理员 API 访问凭据。
+// 管理员登录卡片表单, 校验并暂存管理员 API 访问凭据
 const router = useRouter();
 const key = ref('');
 const remember = ref(true);

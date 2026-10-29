@@ -8,8 +8,8 @@ const COOKIE = 'photos_bridge_session';
 const TTL = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * 创建 Web 控制台会话管理与安全中间件。
- * 负责 HttpOnly Cookie 签名管理、跨站请求防护 (CSRF) 以及会话自动续期。
+ * 创建 Web 控制台会话管理与安全中间件
+ * 负责 HttpOnly Cookie 签名管理、跨站请求防护 (CSRF) 以及会话自动续期
  */
 export const createUISessions = (
     database: PhotosBridgeDatabase,

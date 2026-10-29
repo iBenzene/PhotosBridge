@@ -20,7 +20,7 @@ export const router = createRouter({
     ]
 });
 
-// 全局前置路由守卫, 校验会话状态并在未登录时重定向至登录页。
+// 全局前置路由守卫, 校验会话状态并在未登录时重定向至登录页
 router.beforeEach(async to => {
     await auth.restore();
     if (to.meta.requiresAuth && auth.state.status === 'anonymous') {

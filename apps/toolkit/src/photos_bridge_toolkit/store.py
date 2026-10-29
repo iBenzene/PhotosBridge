@@ -18,10 +18,10 @@ SCHEMA_VERSION = 1
 
 
 class ToolkitStore:
-    """本地离线数据仓储, 负责管理照片元数据 SQLite 索引与 SHA256 二进制对象缓存。"""
+    """本地离线数据仓储, 负责管理照片元数据 SQLite 索引与 SHA256 二进制对象缓存"""
 
     def __init__(self, root: str | Path) -> None:
-        """初始化调用方指定的独立存储目录, 禁止使用隐式默认目录。"""
+        """初始化调用方指定的独立存储目录, 禁止使用隐式默认目录"""
         if not isinstance(root, (str, Path)):
             raise TypeError("root must be an explicit storage path")
         if isinstance(root, str) and not root.strip():
@@ -48,7 +48,7 @@ class ToolkitStore:
         self.close()
 
     def upsert_assets(self, device_id: str, assets: Iterable[Asset]) -> int:
-        """批量插入或更新指定设备的照片元数据记录。"""
+        """批量插入或更新指定设备的照片元数据记录"""
         rows = [
             (
                 device_id,
@@ -92,7 +92,7 @@ class ToolkitStore:
         return len(rows)
 
     def load_assets(self, device_id: str) -> tuple[Asset, ...]:
-        """从本地数据库加载指定设备的全部照片元数据。"""
+        """从本地数据库加载指定设备的全部照片元数据"""
         rows = self.connection.execute(
             "SELECT * FROM assets WHERE device_id = ? ORDER BY created_at, asset_id",
             (device_id,),
@@ -100,7 +100,7 @@ class ToolkitStore:
         return tuple(self._asset(row) for row in rows)
 
     def prune_assets(self, device_id: str, retained_asset_ids: Iterable[str]) -> int:
-        """剔除未包含在保留集合中的旧照片记录, 并同步级联清理关联索引数据。"""
+        """剔除未包含在保留集合中的旧照片记录, 并同步级联清理关联索引数据"""
         retained = sorted({asset_id for asset_id in retained_asset_ids if asset_id})
         with self.connection:
             self.connection.execute(
@@ -134,7 +134,7 @@ class ToolkitStore:
     def replace_album_assets(
         self, device_id: str, album_id: str, asset_ids: Iterable[str]
     ) -> None:
-        """全量替换指定相册内的成员照片标识映射表。"""
+        """全量替换指定相册内的成员照片标识映射表"""
         unique_ids = sorted({asset_id for asset_id in asset_ids if asset_id})
         with self.connection:
             self.connection.execute(
@@ -147,7 +147,7 @@ class ToolkitStore:
             )
 
     def load_album_assets(self, device_id: str, album_id: str) -> tuple[str, ...]:
-        """获取指定相册当前包含的全部照片标识列表。"""
+        """获取指定相册当前包含的全部照片标识列表"""
         rows = self.connection.execute(
             "SELECT asset_id FROM album_assets WHERE device_id = ? AND album_id = ? ORDER BY asset_id",
             (device_id, album_id),
@@ -157,7 +157,7 @@ class ToolkitStore:
     def store_thumbnail(
         self, device_id: str, asset_id: str, content: bytes, media_type: str
     ) -> str:
-        """将缩略图二进制写入基于内容哈希寻址的磁盘对象库, 并关联至对应照片。"""
+        """将缩略图二进制写入基于内容哈希寻址的磁盘对象库, 并关联至对应照片"""
         if not content:
             raise ValueError("thumbnail content cannot be empty")
         exists = self.connection.execute(
@@ -192,7 +192,7 @@ class ToolkitStore:
         return digest
 
     def thumbnail_path(self, device_id: str, asset_id: str) -> Path | None:
-        """获取指定照片资产当前关联的缩略图在本地磁盘中的真实路径。"""
+        """获取指定照片资产当前关联的缩略图在本地磁盘中的真实路径"""
         row = self.connection.execute(
             "SELECT thumbnail_hash FROM assets WHERE device_id = ? AND asset_id = ?",
             (device_id, asset_id),
@@ -203,7 +203,7 @@ class ToolkitStore:
         return path if path.exists() else None
 
     def object_path(self, content_hash: str) -> Path:
-        """根据 64 位 SHA256 内容哈希值生成两级子目录对象物理路径。"""
+        """根据 64 位 SHA256 内容哈希值生成两级子目录对象物理路径"""
         if len(content_hash) != 64 or any(
             character not in "0123456789abcdef" for character in content_hash
         ):
@@ -221,7 +221,7 @@ class ToolkitStore:
         model_fingerprint: str,
         embeddings: Iterable[tuple[str, np.ndarray]],
     ) -> int:
-        """批量归一化并持久化存储指定模型特征指纹下的向量嵌入。"""
+        """批量归一化并持久化存储指定模型特征指纹下的向量嵌入"""
         rows = []
         for asset_id, vector in embeddings:
             normalized = self._normalize_vector(vector)
@@ -252,7 +252,7 @@ class ToolkitStore:
     def load_embeddings(
         self, device_id: str, model_fingerprint: str
     ) -> tuple[Embedding, ...]:
-        """从数据库加载指定模型指纹下的全部特征向量。"""
+        """从数据库加载指定模型指纹下的全部特征向量"""
         rows = self.connection.execute(
             """
             SELECT asset_id, dimensions, vector FROM embeddings
@@ -284,7 +284,7 @@ class ToolkitStore:
         hashes: Iterable[tuple[str, int]],
         bits: int,
     ) -> int:
-        """批量存储指定算法与位宽的感知哈希数值。"""
+        """批量存储指定算法与位宽的感知哈希数值"""
         if not algorithm or bits < 1:
             raise ValueError("invalid perceptual hash")
         width = (bits + 3) // 4
@@ -309,7 +309,7 @@ class ToolkitStore:
         return len(rows)
 
     def load_hashes(self, device_id: str, algorithm: str) -> dict[str, int]:
-        """加载指定算法下的全部照片感知哈希字典。"""
+        """加载指定算法下的全部照片感知哈希字典"""
         rows = self.connection.execute(
             """
             SELECT asset_id, value FROM perceptual_hashes

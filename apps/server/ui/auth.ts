@@ -20,8 +20,8 @@ const defaultStorage = (): KeyStorage | undefined => {
 };
 
 /**
- * 管理后台认证与会话状态管理工厂。
- * 处理本地凭据缓存、会话自动恢复以及登录与登出状态流转。
+ * 管理后台认证与会话状态管理工厂
+ * 处理本地凭据缓存、会话自动恢复以及登录与登出状态流转
  */
 export const createAuth = (
     storage: KeyStorage | undefined = defaultStorage()
@@ -45,14 +45,14 @@ export const createAuth = (
         try {
             storage?.setItem(STORAGE_KEY, key);
         } catch {
-            // 忽略浏览器隐私模式或禁用存储时的写入异常。
+            // 忽略浏览器隐私模式或禁用存储时的写入异常
         }
     };
     const clearSavedKey = () => {
         try {
             storage?.removeItem(STORAGE_KEY);
         } catch {
-            // 忽略存储清理异常。
+            // 忽略存储清理异常
         }
     };
     const invalidate = () => {

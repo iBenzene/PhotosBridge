@@ -31,7 +31,7 @@ export type PlanDelivery = {
 };
 
 /**
- * 设备通信集线器, 负责管理移动端设备的长连接通道、反向 RPC 调用以及计划递送分发。
+ * 设备通信集线器, 负责管理移动端设备的长连接通道、反向 RPC 调用以及计划递送分发
  */
 export class DeviceHub {
     private readonly sockets = new Map<string, WebSocket>();
@@ -41,7 +41,7 @@ export class DeviceHub {
     constructor(private readonly database: PhotosBridgeDatabase) {}
 
     /**
-     * 挂载 HTTP Upgrade 协议升级监听, 验证设备身份并接入 WebSocket 长连接。
+     * 挂载 HTTP Upgrade 协议升级监听, 验证设备身份并接入 WebSocket 长连接
      */
     attach(server: Server): void {
         server.on('upgrade', (request, socket, head) => {
@@ -79,7 +79,7 @@ export class DeviceHub {
     }
 
     /**
-     * 向指定在线设备发起反向 RPC 消息请求, 并基于消息 ID 等待移动端响应或超时中止。
+     * 向指定在线设备发起反向 RPC 消息请求, 并基于消息 ID 等待移动端响应或超时中止
      */
     async request(
         deviceID: string,
@@ -169,7 +169,7 @@ export class DeviceHub {
                 this.sockets.delete(deviceID);
             }
         });
-        // 握手成功后下发会话就绪帧, 并立即投递该设备在离线期间积压的未过期计划。
+        // 握手成功后下发会话就绪帧, 并立即投递该设备在离线期间积压的未过期计划
         socket.send(
             JSON.stringify({
                 correlation_id: null,

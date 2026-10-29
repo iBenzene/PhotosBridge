@@ -253,7 +253,7 @@ $('logout').onclick = async () => {
     try {
         await cancelPairing();
     } catch {
-        /* 未完成的配对码仍会在五分钟后过期。 */
+        /* 未完成的配对码仍会在五分钟后过期 */
     }
     key = '';
     pairing = null;

@@ -17,8 +17,8 @@ export interface Pairing {
 export type PairingStatus = 'pending' | 'paired' | 'expired' | 'invalid';
 
 /**
- * 封装管理后台与服务端通信的 HTTP 接口客户端。
- * 使用同源 Cookie 会话, 并对异常响应码进行统一处理。
+ * 封装管理后台与服务端通信的 HTTP 接口客户端
+ * 使用同源 Cookie 会话, 并对异常响应码进行统一处理
  */
 export class ApiError extends Error {
     constructor(

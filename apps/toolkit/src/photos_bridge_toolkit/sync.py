@@ -9,10 +9,9 @@ from .store import ToolkitStore
 def sync_assets(
     client: BridgeClient, store: ToolkitStore, device_id: str, *, limit: int = 500
 ) -> int:
-    """分页同步指定远端设备上的全部照片元数据, 返回写入的记录总数。
+    """分页同步指定远端设备上的全部照片元数据, 返回写入的记录总数
 
-    采用增量合并写入模式, 本地已有记录不会被删除。执行过程中若发生中断,
-    已拉取成功的分页依然保留在本地数据库中, 由调用方控制重试逻辑。
+    采用增量合并写入模式, 本地已有记录不会被删除, 执行过程中若发生中断    已拉取成功的分页依然保留在本地数据库中, 由调用方控制重试逻辑
     """
     count = 0
     for page in client.iter_assets(device_id, limit=limit):
@@ -30,10 +29,10 @@ def cache_thumbnails(
     content_mode: ThumbnailContentMode = "fit",
     refresh: bool = False,
 ) -> int:
-    """为已编目的照片批量拉取并本地缓存缩略图, 返回本次实际下载的照片数量。
+    """为已编目的照片批量拉取并本地缓存缩略图, 返回本次实际下载的照片数量
 
-    若本地已存在缓存文件则直接复用, 传入 refresh=True 时强制重新拉取覆盖。
-    发生网络或服务端异常时直接向外抛出, 已成功写入磁盘的文件依然保留供后续复用。
+    若本地已存在缓存文件则直接复用, 传入 refresh=True 时强制重新拉取覆盖
+    发生网络或服务端异常时直接向外抛出, 已成功写入磁盘的文件依然保留供后续复用
     """
     if not 1 <= max_dimension <= 1024:
         raise ValueError("max_dimension must be between 1 and 1024")

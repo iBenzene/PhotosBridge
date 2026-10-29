@@ -8,7 +8,7 @@ import { useInterval } from '../composables/useInterval';
 import BaseDialog from './BaseDialog.vue';
 import ErrorMessage from './ErrorMessage.vue';
 
-// 设备扫码配对弹窗, 负责二维码渲染、倒计时管理以及配对成功状态的轮询检测。
+// 设备扫码配对弹窗, 负责二维码渲染、倒计时管理以及配对成功状态的轮询检测
 const props = defineProps<{ api: AdminApi }>();
 const emit = defineEmits<{ close: []; paired: [] }>();
 const { busy, error, run } = useAction();
@@ -108,14 +108,14 @@ const poll = async () => {
 useInterval(() => {
     now.value = Date.now();
 }, 1000);
-// 定期轮询检查当前配对令牌是否已被手机端扫码核销。
+// 定期轮询检查当前配对令牌是否已被手机端扫码核销
 useInterval(() => {
     void poll();
 }, 3000);
 onMounted(generate);
 onBeforeUnmount(() => {
     disposed = true;
-    // 页面退出时尽力撤销未使用的配对码, 网络不可用时由五分钟有效期兜底。
+    // 页面退出时尽力撤销未使用的配对码, 网络不可用时由五分钟有效期兜底
     void cancel().catch(() => undefined);
 });
 </script>

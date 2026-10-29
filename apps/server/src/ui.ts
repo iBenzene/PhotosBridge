@@ -8,20 +8,20 @@ import type { AppDependencies } from './app.js';
 import { createUISessions } from './ui-session.js';
 
 /**
- * 挂载 Web 控制台静态资源与管理端专用 API 路由。
+ * 挂载 Web 控制台静态资源与管理端专用 API 路由
  */
 export const mountUI = (
     app: express.Express,
     { config, database, hub }: AppDependencies,
     loginLimit: RequestHandler
 ): void => {
-    // 兼容源码运行开发模式与打包后的生产部署模式, 自动定位静态资源目录。
+    // 兼容源码运行开发模式与打包后的生产部署模式, 自动定位静态资源目录
     const fromSource = existsSync(new URL('../package.json', import.meta.url));
     const directory = fileURLToPath(
         new URL(fromSource ? '../dist/ui/' : '../ui/', import.meta.url)
     );
     app.get('/', (...[, response]) => response.redirect('/ui/'));
-    // 注入安全响应头, 禁用浏览器资源缓存并开启严格的内容安全策略 (CSP)。
+    // 注入安全响应头, 禁用浏览器资源缓存并开启严格的内容安全策略 (CSP)
     app.use('/ui', (...[, response, next]) => {
         response.setHeader('Cache-Control', 'no-store');
         response.setHeader('Referrer-Policy', 'no-referrer');
@@ -59,7 +59,7 @@ export const mountUI = (
         hub.disconnect(deviceID);
         response.sendStatus(204);
     });
-    // 创建新的设备配对会话, 并同步生成用于手机端扫码的 Data URL 二维码。
+    // 创建新的设备配对会话, 并同步生成用于手机端扫码的 Data URL 二维码
     app.post('/ui/api/pairing', async (...[, response]) => {
         const session = database.createPairingSession();
         const payload = {
@@ -86,7 +86,7 @@ export const mountUI = (
         database.cancelPairing(String(request.body?.pairing_token ?? ''));
         response.sendStatus(204);
     });
-    // 更新指定设备的展示名称, 限制长度且不可为空。
+    // 更新指定设备的展示名称, 限制长度且不可为空
     app.patch('/ui/api/devices/:deviceID', (request, response) => {
         const name = request.body?.display_name;
         if (

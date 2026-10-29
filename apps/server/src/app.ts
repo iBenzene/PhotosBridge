@@ -331,7 +331,7 @@ export const createApp = ({
             response: Response,
             _next: NextFunction
         ) => {
-            // Express 依据四参数函数签名识别全局错误处理中间件。
+            // Express 依据四参数函数签名识别全局错误处理中间件
             void _request;
             void _next;
             if (error instanceof PairingError) {

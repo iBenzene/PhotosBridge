@@ -19,7 +19,7 @@ const getLocalIPv4Addresses = (): string[] => {
 export const prepareEnvironment = async (): Promise<void> => {
     const isProduction = process.env.NODE_ENV === 'production';
 
-    // 非生产环境使用固定默认密钥, 生产环境必须显式配置。
+    // 非生产环境使用固定默认密钥, 生产环境必须显式配置
     if (!process.env.ADMIN_KEY) {
         if (isProduction) {
             throw new Error('ADMIN_KEY is required in production mode.');
@@ -74,7 +74,7 @@ export const prepareEnvironment = async (): Promise<void> => {
                 selectedIP = availableIPs[choice - 1];
             }
         } catch {
-            // 当交互式输入被中断时, 直接回退并使用推荐的首选局域网地址。
+            // 当交互式输入被中断时, 直接回退并使用推荐的首选局域网地址
         } finally {
             rl.close();
         }
